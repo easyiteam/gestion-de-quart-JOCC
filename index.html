@@ -498,7 +498,7 @@ async function load(){
   if(!D.absences)D.absences=[];
   await sv();
 }
-async function sv(){try{localStorage.setItem('jocc_v5',JSON.stringify(D));}catch(e){}}
+async function sv(){try{localStorage.setItem('jocc_v5',JSON.stringify(D)));}catch(e){}}
 
 function initSample(){
   const defs=[['MARTIN','Jean','LV','A','chef'],['DUBOIS','Marie','OIM','A','radio'],['BERNARD','Paul','CC','A','veille'],['THOMAS','Sophie','EV1','A','permanence'],['PETIT','Luc','LV','B','chef'],['ROBERT','Anna','OIM','B','radio'],['RICHARD','Marc','CC','B','veille'],['SIMON','Julie','EV1','B','permanence'],['MOREAU','Eric','LV','C','chef'],['LAURENT','Claire','OIM','C','radio'],['GARCIA','Pierre','CC','C','veille'],['LEROY','Isabelle','EV1','C','permanence'],['ADAM','Nicolas','LV','D','chef'],['ROUX','Catherine','OIM','D','radio'],['FOURNIER','Alain','CC','D','veille'],['VINCENT','Sandra','EV1','D','permanence'],['HOUNKPE','Romuald','CF','A','supervision']];
@@ -583,144 +583,7 @@ async function saveSitrep(){
 async function delSitrep(id){if(!confirm('Supprimer ce SITREP ?'))return;D.sitreps=(D.sitreps||[]).filter(s=>s.id!==id);await sv();renderSitrep();renderDash();}
 function printSitrep(id){
   const s=(D.sitreps||[]).find(x=>x.id===id);if(!s)return;
-  const html=`<html><head><title>SITREP N°${s.num}</title><style>body{font-family:'Courier New',monospace;font-size:13px;padding:30px;max-width:700px;margin:0 auto}h1{font-size:16px;border-bottom:2px solid #0d2035;padding-bottom:8px;margin-bottom:16px;color:#0d2035;letter-spacing:.08em}.row{display:flex;padding:7px 0;border-bottom:1px solid #e0e0e0}.lbl{width:140px;font-weight:bold;color:#555;flex-shrink:0;font-size:11px;text-transform:uppercase;letter-spacing:.05em}.val{flex:1;font-size:13px;color:#111}.hb{background:#0d2035;color:#fff;padding:14px 16px;border-radius:4px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}@media print{.hb{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body><div class="hb"><div style="font-size:15px;font-weight:bold;letter-spacing:.08em">PRÉFECTURE MARITIME — JOCC</div><div style="font-size:11px;opacity:.8">République du Bénin</div></div><h1>SITREP N° ${s.num}</h1><div class="row"><div class="lbl">DATE</div><div class="val">${fmt(s.date)}</div></div><div class="row"><div class="lbl">TIME</div><div class="val">${s.time||'—'}</div></div><div class="row"><div class="lbl">ÉQUIPE</div><div class="val">${s.equipe}</div></div><div class="row"><div class="lbl">SPEED</div><div class="val">${s.speed?s.speed+' nds':'—'}</div></div><div class="row"><div class="lbl">COURSE</div><div class="val">${s.course||'—'}</div></div><div class="row"><div class="lbl">POSITION</div><div class="val">${s.lat&&s.lon?s.lat+' / '+s.lon:'—'}</div></div><div class="row"><div class="lbl">AZM/PAC</div><div class="val">${s.azm_pac||'—'}</div></div><div class="row"><div class="lbl">DIST/PAC</div><div class="val">${s.dist_pac?s.dist_pac+' nautiques':'—'}</div></div><div class="row"><div class="lbl">DIST/CÔTE</div><div class="val">${s.dist_cote?s.dist_cote+' nautiques':'—'}</div></div><div class="row"><div class="lbl">AZM/SPM</div><div class="val">${s.azm_spm||'—'}</div></div><div class="row"><div class="lbl">DIST/SPM</div><div class="val">${s.dist_spm?s.dist_spm+' nautiques':'—'}</div></div>${s.comment?`<div style="background:#f5f7fa;border:1px solid #ddd;padding:10px;margin-top:14px;border-radius:4px"><strong>COMMENTAIRE :</strong><br>${s.comment}</div>`:''}<p style="font-size:10px;color:#999;margin-top:20px;border-top:1px solid #eee;padding-top:8px">Généré le ${new Date().toLocaleString('fr-FR')} — JOCC / Préfecture Maritime — République du Bénin</p>
-<!-- ═══ ESCORTE ═══ -->
-<div id="tab-escorte" class="tab" style="display:none">
-  <div class="card-dk mb12">
-    <div class="flex-b">
-      <div>
-        <div style="font-size:15px;font-weight:700;letter-spacing:.06em;color:rgba(200,164,74,.9)">⚓ MISSIONS D'ESCORTE</div>
-        <div style="font-size:10px;color:rgba(111,163,200,.7);margin-top:2px">Marine Nationale · Appareillage · Escortes entrante et sortante</div>
-      </div>
-      <button class="btn btn-gold" id="btn-new-escorte">+ Nouvelle mission</button>
-    </div>
-  </div>
-
-  <div id="escorte-form" style="display:none" class="card-section mb12">
-    <div class="card-section-header">
-      <div style="font-size:13px;font-weight:700" id="escorte-form-title">Nouvelle mission d'escorte</div>
-      <button class="btn" id="escorte-cancel">✕ Annuler</button>
-    </div>
-    <div class="card-section-body">
-      <div class="section-lbl">📋 Identification de la mission</div>
-      <div class="g4 mb10">
-        <div class="fg"><label>N° Mission</label><input type="text" id="esc-num" placeholder="ESC-001"></div>
-        <div class="fg"><label>Date</label><input type="date" id="esc-date"></div>
-        <div class="fg"><label>Heure d'appareillage</label><input type="time" id="esc-heure"></div>
-        <div class="fg"><label>Type de mission</label>
-          <select id="esc-type">
-            <option value="entree">Escorte à l'entrée</option>
-            <option value="sortie">Escorte à la sortie</option>
-            <option value="aller-retour">Aller-retour</option>
-          </select>
-        </div>
-        <div class="fg"><label>Zone d'opération</label><input type="text" id="esc-zone" placeholder="Ex: Golfe de Bénin, zone 12nm"></div>
-        <div class="fg"><label>Point de rendez-vous</label><input type="text" id="esc-rdv" placeholder="Lat/Lon ou repère"></div>
-        <div class="fg"><label>Durée estimée</label><input type="text" id="esc-duree" placeholder="Ex: 4h, 12h"></div>
-        <div class="fg"><label>Équipe de quart</label>
-          <select id="esc-equipe"><option>A</option><option>B</option><option>C</option><option>D</option></select>
-        </div>
-      </div>
-
-      <div class="section-lbl">🚢 Navire à escorter</div>
-      <div style="background:rgba(74,127,165,.07);border:1.5px solid rgba(74,127,165,.25);border-radius:10px;padding:12px;margin-bottom:12px">
-        <div class="g3 mb8">
-          <div class="fg"><label>Nom du navire</label><input type="text" id="esc-cible-nom" placeholder="Ex: MV ATLANTIC STAR"></div>
-          <div class="fg"><label>MMSI</label><input type="text" id="esc-cible-mmsi" placeholder="Ex: 636012345"></div>
-          <div class="fg"><label>Numéro IMO</label><input type="text" id="esc-cible-imo" placeholder="Ex: IMO9876543"></div>
-          <div class="fg"><label>Indicatif d'appel</label><input type="text" id="esc-cible-cs" placeholder="Ex: VNAA"></div>
-          <div class="fg"><label>Pavillon</label><input type="text" id="esc-cible-pavillon" placeholder="Ex: Panama, France"></div>
-          <div class="fg"><label>Type de navire</label>
-            <select id="esc-cible-type">
-              <option value="cargo">Cargo</option>
-              <option value="petrolier">Pétrolier / Tanker</option>
-              <option value="vraquier">Vraquier</option>
-              <option value="conteneur">Porte-conteneurs</option>
-              <option value="passagers">Passagers</option>
-              <option value="roro">Ro-Ro</option>
-              <option value="gazier">Gazier</option>
-              <option value="chimquier">Chimiquier</option>
-              <option value="peche">Navire de pêche</option>
-              <option value="remorqueur">Remorqueur</option>
-              <option value="autre">Autre</option>
-            </select>
-          </div>
-          <div class="fg"><label>Longueur LOA (m)</label><input type="number" id="esc-cible-loa" placeholder="185"></div>
-          <div class="fg"><label>Jauge brute (GT)</label><input type="number" id="esc-cible-gt" placeholder="25000"></div>
-          <div class="fg"><label>Tirant d'eau (m)</label><input type="text" id="esc-cible-draft" placeholder="8.5"></div>
-          <div class="fg"><label>Port de provenance</label><input type="text" id="esc-cible-from" placeholder="Ex: Lomé, Lagos"></div>
-          <div class="fg"><label>Port de destination</label><input type="text" id="esc-cible-to" placeholder="Ex: Cotonou, Dakar"></div>
-          <div class="fg"><label>ETA / ETD</label><input type="datetime-local" id="esc-cible-eta"></div>
-        </div>
-        <div class="fg" style="margin-bottom:0"><label>Cargaison / Marchandise</label><input type="text" id="esc-cible-cargo" placeholder="Ex: Produits pétroliers, Conteneurs, Vrac..."></div>
-      </div>
-
-      <div class="section-lbl">🛥 Navire escorteur (Marine Nationale)</div>
-      <div style="background:rgba(200,164,74,.06);border:1.5px solid rgba(200,164,74,.28);border-radius:10px;padding:12px;margin-bottom:12px">
-        <div class="g3 mb8">
-          <div class="fg"><label>Nom du bâtiment</label><input type="text" id="esc-nav-nom" placeholder="Ex: PR SOGLO, PR BENIN"></div>
-          <div class="fg"><label>MMSI</label><input type="text" id="esc-nav-mmsi" placeholder="Ex: 605000001"></div>
-          <div class="fg"><label>Indicatif d'appel</label><input type="text" id="esc-nav-cs" placeholder="Ex: TXAA"></div>
-          <div class="fg"><label>Pavillon</label><input type="text" id="esc-nav-pavillon" placeholder="Bénin"></div>
-          <div class="fg"><label>Type de bâtiment</label>
-            <select id="esc-nav-type">
-              <option value="patrouilleur">Patrouilleur</option>
-              <option value="vedette">Vedette rapide</option>
-              <option value="aviso">Aviso</option>
-              <option value="fregatte">Frégate</option>
-              <option value="corvette">Corvette</option>
-              <option value="bac">Bt. de commandement</option>
-              <option value="autre">Autre</option>
-            </select>
-          </div>
-          <div class="fg"><label>Longueur LOA (m)</label><input type="number" id="esc-nav-loa" placeholder="45"></div>
-          <div class="fg"><label>Commandant</label><input type="text" id="esc-nav-cmd" placeholder="Grade NOM Prénom"></div>
-          <div class="fg"><label>Canal VHF de travail</label><input type="text" id="esc-nav-vhf" placeholder="VHF 16 / CH 12"></div>
-          <div class="fg"><label>Effectif embarqué</label><input type="number" id="esc-nav-effectif" placeholder="12"></div>
-        </div>
-        <div class="fg" style="margin-bottom:0"><label>Armement / Équipements notables</label><input type="text" id="esc-nav-arm" placeholder="Ex: Mitrailleuses 12.7mm, radar ARPA, AIS classe A..."></div>
-      </div>
-
-      <div class="fg"><label>Observations / Instructions particulières</label>
-        <textarea id="esc-comment" rows="3" placeholder="Ex: Menace piraterie signalée, coordination autorités portuaires, règles d'engagement..."></textarea>
-      </div>
-      <input type="hidden" id="esc-edit-id">
-      <div class="flex">
-        <button class="btn btn-gold" id="esc-save">✔ Enregistrer la mission</button>
-        <button class="btn" id="esc-cancel2">✕ Annuler</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="g4 mb10">
-    <div class="stat"><div class="stat-l">Total missions</div><div class="stat-v" id="esg-total">0</div></div>
-    <div class="stat"><div class="stat-l">En cours</div><div class="stat-v" id="esg-encours" style="color:#27ae60">0</div></div>
-    <div class="stat"><div class="stat-l">Planifiées</div><div class="stat-v" id="esg-plan" style="color:rgba(200,164,74,.9)">0</div></div>
-    <div class="stat"><div class="stat-l">Terminées</div><div class="stat-v" id="esg-done">0</div></div>
-  </div>
-  <div class="flex-b mb10">
-    <div style="font-size:12px;font-weight:700;letter-spacing:.05em" id="esc-count-lbl"></div>
-    <div class="flex">
-      <select id="esc-flt-st" style="width:auto;font-size:12px">
-        <option value="">Tous statuts</option>
-        <option value="planifiee">Planifiée</option>
-        <option value="encours">En cours</option>
-        <option value="terminee">Terminée</option>
-        <option value="annulee">Annulée</option>
-      </select>
-      <select id="esc-flt-ty" style="width:auto;font-size:12px">
-        <option value="">Tous types</option>
-        <option value="entree">Entrée</option>
-        <option value="sortie">Sortie</option>
-        <option value="aller-retour">Aller-retour</option>
-      </select>
-      <input type="date" id="esc-flt-dt" style="width:auto;font-size:12px">
-    </div>
-  </div>
-  <div id="escorte-list"></div>
-</div>
-
-</body></html>`;
+  const html=`<html><head><title>SITREP N°${s.num}</title><style>body{font-family:'Courier New',monospace;font-size:13px;padding:30px;max-width:700px;margin:0 auto}h1{font-size:16px;border-bottom:2px solid #0d2035;padding-bottom:8px;margin-bottom:16px;color:#0d2035;letter-spacing:.08em}.row{display:flex;padding:7px 0;border-bottom:1px solid #e0e0e0}.lbl{width:140px;font-weight:bold;color:#555;flex-shrink:0;font-size:11px;text-transform:uppercase;letter-spacing:.05em}.val{flex:1;font-size:13px;color:#111}.hb{background:#0d2035;color:#fff;padding:14px 16px;border-radius:4px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}@media print{.hb{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body><div class="hb"><div style="font-size:15px;font-weight:bold;letter-spacing:.08em">PRÉFECTURE MARITIME — JOCC</div><div style="font-size:11px;opacity:.8">République du Bénin</div></div><h1>SITREP N° ${s.num}</h1><div class="row"><div class="lbl">DATE</div><div class="val">${fmt(s.date)}</div></div><div class="row"><div class="lbl">TIME</div><div class="val">${s.time||'—'}</div></div><div class="row"><div class="lbl">ÉQUIPE</div><div class="val">${s.equipe}</div></div><div class="row"><div class="lbl">SPEED</div><div class="val">${s.speed?s.speed+' nds':'—'}</div></div><div class="row"><div class="lbl">COURSE</div><div class="val">${s.course||'—'}</div></div><div class="row"><div class="lbl">POSITION</div><div class="val">${s.lat&&s.lon?s.lat+' / '+s.lon:'—'}</div></div><div class="row"><div class="lbl">AZM/PAC</div><div class="val">${s.azm_pac||'—'}</div></div><div class="row"><div class="lbl">DIST/PAC</div><div class="val">${s.dist_pac?s.dist_pac+' nautiques':'—'}</div></div><div class="row"><div class="lbl">DIST/CÔTE</div><div class="val">${s.dist_cote?s.dist_cote+' nautiques':'—'}</div></div><div class="row"><div class="lbl">AZM/SPM</div><div class="val">${s.azm_spm||'—'}</div></div><div class="row"><div class="lbl">DIST/SPM</div><div class="val">${s.dist_spm?s.dist_spm+' nautiques':'—'}</div></div>${s.comment?`<div style="background:#f5f7fa;border:1px solid #ddd;padding:10px;margin-top:14px;border-radius:4px"><strong>COMMENTAIRE :</strong><br>${s.comment}</div>`:''}<p style="font-size:10px;color:#999;margin-top:20px;border-top:1px solid #eee;padding-top:8px">Généré le ${new Date().toLocaleString('fr-FR')} — JOCC / Préfecture Maritime — République du Bénin</p><\/body><\/html>`;
   const w=window.open('','_blank','width=750,height=600');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),500);}
 }
 
@@ -769,144 +632,7 @@ function renderEvList(){const r=D.rapports[curRptDate];if(!r)return;const evs=(r
 async function saveRptMeta(){if(!curRptDate)return;const r=D.rapports[curRptDate];r.chef=document.getElementById('rpt-chef').value;r.observations=document.getElementById('rpt-obs').value;pushN('rapport','Rapport du '+fmt(curRptDate),'Mis à jour — Équipe '+r.equipe);await sv();alert('Entête enregistrée.');}
 async function addEv(){const heure=document.getElementById('ev-heure').value;const type=document.getElementById('ev-type').value;const desc=document.getElementById('ev-desc').value.trim();if(!heure||!desc){alert('Heure et description requises');return;}D.rapports[curRptDate].evenements.push({id:gid(),heure,type,description:desc});if(type==='urgence')pushN('urgence','URGENCE — '+fmt(curRptDate)+' à '+heure,desc,true);else pushN('rapport','Événement ('+EV_L[type]+') — '+fmt(curRptDate),heure+' · '+desc);await sv();document.getElementById('ev-heure').value='';document.getElementById('ev-desc').value='';document.getElementById('ev-form').style.display='none';renderEvList();}
 async function delEv(i){if(!confirm('Supprimer ?'))return;D.rapports[curRptDate].evenements.splice(i,1);await sv();renderEvList();}
-function printRpt(){const r=D.rapports[curRptDate];if(!r)return;const chef=gOp(r.chef);const chefL=chef?chef.grade+' '+chef.nom+' '+chef.prenom:'Non désigné';const evs=(r.evenements||[]).slice().sort((a,b)=>a.heure.localeCompare(b.heure));const ops=tOps(r.equipe);const html=`<html><head><title>Rapport JOCC ${fmt(curRptDate)}</title><style>body{font-family:Arial,sans-serif;font-size:13px;padding:30px;max-width:800px}h1{font-size:16px;border-bottom:2px solid #0d2035;padding-bottom:8px;margin-bottom:16px;color:#0d2035}h2{font-size:13px;font-weight:bold;margin:14px 0 6px;color:#0d2035;border-bottom:1px solid #ddd;padding-bottom:3px}table{width:100%;border-collapse:collapse}th{background:#0d2035;color:#fff;padding:5px 8px;font-size:12px;text-align:left}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:12px}.meta{display:flex;gap:20px;font-size:12px;margin-bottom:14px;padding:10px;background:#f0f4f8}</style></head><body><h1>RAPPORT DE QUART — JOCC / Préfecture Maritime du Bénin</h1><div class="meta"><div>Date : <strong>${fmt(curRptDate)}</strong></div><div>Équipe : <strong>${r.equipe}</strong></div><div>Responsable : <strong>${chefL}</strong></div></div><h2>Équipe</h2><table><tr><th>Nom</th><th>Grade</th><th>Poste</th></tr>${ops.map(o=>`<tr><td>${o.nom} ${o.prenom}</td><td>${o.grade}</td><td>${POSTES[o.poste]||o.poste}</td></tr>`).join('')}</table><h2>Observations</h2><p style="font-size:12px">${r.observations||'Aucune observation particulière.'}</p><h2>Main courante — ${evs.length} événement(s)</h2><table><tr><th style="width:55px">Heure</th><th style="width:80px">Type</th><th>Description</th></tr>${evs.map(e=>`<tr><td>${e.heure}</td><td>${EV_L[e.type]}</td><td>${e.description}</td></tr>`).join('')}${!evs.length?'<tr><td colspan="3" style="text-align:center;color:#999">Aucun événement</td></tr>':''}</table><p style="font-size:10px;color:#999;margin-top:20px;border-top:1px solid #eee;padding-top:8px">Généré le ${new Date().toLocaleString('fr-FR')} — JOCC / Préfecture Maritime — République du Bénin</p>
-<!-- ═══ ESCORTE ═══ -->
-<div id="tab-escorte" class="tab" style="display:none">
-  <div class="card-dk mb12">
-    <div class="flex-b">
-      <div>
-        <div style="font-size:15px;font-weight:700;letter-spacing:.06em;color:rgba(200,164,74,.9)">⚓ MISSIONS D'ESCORTE</div>
-        <div style="font-size:10px;color:rgba(111,163,200,.7);margin-top:2px">Marine Nationale · Appareillage · Escortes entrante et sortante</div>
-      </div>
-      <button class="btn btn-gold" id="btn-new-escorte">+ Nouvelle mission</button>
-    </div>
-  </div>
-
-  <div id="escorte-form" style="display:none" class="card-section mb12">
-    <div class="card-section-header">
-      <div style="font-size:13px;font-weight:700" id="escorte-form-title">Nouvelle mission d'escorte</div>
-      <button class="btn" id="escorte-cancel">✕ Annuler</button>
-    </div>
-    <div class="card-section-body">
-      <div class="section-lbl">📋 Identification de la mission</div>
-      <div class="g4 mb10">
-        <div class="fg"><label>N° Mission</label><input type="text" id="esc-num" placeholder="ESC-001"></div>
-        <div class="fg"><label>Date</label><input type="date" id="esc-date"></div>
-        <div class="fg"><label>Heure d'appareillage</label><input type="time" id="esc-heure"></div>
-        <div class="fg"><label>Type de mission</label>
-          <select id="esc-type">
-            <option value="entree">Escorte à l'entrée</option>
-            <option value="sortie">Escorte à la sortie</option>
-            <option value="aller-retour">Aller-retour</option>
-          </select>
-        </div>
-        <div class="fg"><label>Zone d'opération</label><input type="text" id="esc-zone" placeholder="Ex: Golfe de Bénin, zone 12nm"></div>
-        <div class="fg"><label>Point de rendez-vous</label><input type="text" id="esc-rdv" placeholder="Lat/Lon ou repère"></div>
-        <div class="fg"><label>Durée estimée</label><input type="text" id="esc-duree" placeholder="Ex: 4h, 12h"></div>
-        <div class="fg"><label>Équipe de quart</label>
-          <select id="esc-equipe"><option>A</option><option>B</option><option>C</option><option>D</option></select>
-        </div>
-      </div>
-
-      <div class="section-lbl">🚢 Navire à escorter</div>
-      <div style="background:rgba(74,127,165,.07);border:1.5px solid rgba(74,127,165,.25);border-radius:10px;padding:12px;margin-bottom:12px">
-        <div class="g3 mb8">
-          <div class="fg"><label>Nom du navire</label><input type="text" id="esc-cible-nom" placeholder="Ex: MV ATLANTIC STAR"></div>
-          <div class="fg"><label>MMSI</label><input type="text" id="esc-cible-mmsi" placeholder="Ex: 636012345"></div>
-          <div class="fg"><label>Numéro IMO</label><input type="text" id="esc-cible-imo" placeholder="Ex: IMO9876543"></div>
-          <div class="fg"><label>Indicatif d'appel</label><input type="text" id="esc-cible-cs" placeholder="Ex: VNAA"></div>
-          <div class="fg"><label>Pavillon</label><input type="text" id="esc-cible-pavillon" placeholder="Ex: Panama, France"></div>
-          <div class="fg"><label>Type de navire</label>
-            <select id="esc-cible-type">
-              <option value="cargo">Cargo</option>
-              <option value="petrolier">Pétrolier / Tanker</option>
-              <option value="vraquier">Vraquier</option>
-              <option value="conteneur">Porte-conteneurs</option>
-              <option value="passagers">Passagers</option>
-              <option value="roro">Ro-Ro</option>
-              <option value="gazier">Gazier</option>
-              <option value="chimquier">Chimiquier</option>
-              <option value="peche">Navire de pêche</option>
-              <option value="remorqueur">Remorqueur</option>
-              <option value="autre">Autre</option>
-            </select>
-          </div>
-          <div class="fg"><label>Longueur LOA (m)</label><input type="number" id="esc-cible-loa" placeholder="185"></div>
-          <div class="fg"><label>Jauge brute (GT)</label><input type="number" id="esc-cible-gt" placeholder="25000"></div>
-          <div class="fg"><label>Tirant d'eau (m)</label><input type="text" id="esc-cible-draft" placeholder="8.5"></div>
-          <div class="fg"><label>Port de provenance</label><input type="text" id="esc-cible-from" placeholder="Ex: Lomé, Lagos"></div>
-          <div class="fg"><label>Port de destination</label><input type="text" id="esc-cible-to" placeholder="Ex: Cotonou, Dakar"></div>
-          <div class="fg"><label>ETA / ETD</label><input type="datetime-local" id="esc-cible-eta"></div>
-        </div>
-        <div class="fg" style="margin-bottom:0"><label>Cargaison / Marchandise</label><input type="text" id="esc-cible-cargo" placeholder="Ex: Produits pétroliers, Conteneurs, Vrac..."></div>
-      </div>
-
-      <div class="section-lbl">🛥 Navire escorteur (Marine Nationale)</div>
-      <div style="background:rgba(200,164,74,.06);border:1.5px solid rgba(200,164,74,.28);border-radius:10px;padding:12px;margin-bottom:12px">
-        <div class="g3 mb8">
-          <div class="fg"><label>Nom du bâtiment</label><input type="text" id="esc-nav-nom" placeholder="Ex: PR SOGLO, PR BENIN"></div>
-          <div class="fg"><label>MMSI</label><input type="text" id="esc-nav-mmsi" placeholder="Ex: 605000001"></div>
-          <div class="fg"><label>Indicatif d'appel</label><input type="text" id="esc-nav-cs" placeholder="Ex: TXAA"></div>
-          <div class="fg"><label>Pavillon</label><input type="text" id="esc-nav-pavillon" placeholder="Bénin"></div>
-          <div class="fg"><label>Type de bâtiment</label>
-            <select id="esc-nav-type">
-              <option value="patrouilleur">Patrouilleur</option>
-              <option value="vedette">Vedette rapide</option>
-              <option value="aviso">Aviso</option>
-              <option value="fregatte">Frégate</option>
-              <option value="corvette">Corvette</option>
-              <option value="bac">Bt. de commandement</option>
-              <option value="autre">Autre</option>
-            </select>
-          </div>
-          <div class="fg"><label>Longueur LOA (m)</label><input type="number" id="esc-nav-loa" placeholder="45"></div>
-          <div class="fg"><label>Commandant</label><input type="text" id="esc-nav-cmd" placeholder="Grade NOM Prénom"></div>
-          <div class="fg"><label>Canal VHF de travail</label><input type="text" id="esc-nav-vhf" placeholder="VHF 16 / CH 12"></div>
-          <div class="fg"><label>Effectif embarqué</label><input type="number" id="esc-nav-effectif" placeholder="12"></div>
-        </div>
-        <div class="fg" style="margin-bottom:0"><label>Armement / Équipements notables</label><input type="text" id="esc-nav-arm" placeholder="Ex: Mitrailleuses 12.7mm, radar ARPA, AIS classe A..."></div>
-      </div>
-
-      <div class="fg"><label>Observations / Instructions particulières</label>
-        <textarea id="esc-comment" rows="3" placeholder="Ex: Menace piraterie signalée, coordination autorités portuaires, règles d'engagement..."></textarea>
-      </div>
-      <input type="hidden" id="esc-edit-id">
-      <div class="flex">
-        <button class="btn btn-gold" id="esc-save">✔ Enregistrer la mission</button>
-        <button class="btn" id="esc-cancel2">✕ Annuler</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="g4 mb10">
-    <div class="stat"><div class="stat-l">Total missions</div><div class="stat-v" id="esg-total">0</div></div>
-    <div class="stat"><div class="stat-l">En cours</div><div class="stat-v" id="esg-encours" style="color:#27ae60">0</div></div>
-    <div class="stat"><div class="stat-l">Planifiées</div><div class="stat-v" id="esg-plan" style="color:rgba(200,164,74,.9)">0</div></div>
-    <div class="stat"><div class="stat-l">Terminées</div><div class="stat-v" id="esg-done">0</div></div>
-  </div>
-  <div class="flex-b mb10">
-    <div style="font-size:12px;font-weight:700;letter-spacing:.05em" id="esc-count-lbl"></div>
-    <div class="flex">
-      <select id="esc-flt-st" style="width:auto;font-size:12px">
-        <option value="">Tous statuts</option>
-        <option value="planifiee">Planifiée</option>
-        <option value="encours">En cours</option>
-        <option value="terminee">Terminée</option>
-        <option value="annulee">Annulée</option>
-      </select>
-      <select id="esc-flt-ty" style="width:auto;font-size:12px">
-        <option value="">Tous types</option>
-        <option value="entree">Entrée</option>
-        <option value="sortie">Sortie</option>
-        <option value="aller-retour">Aller-retour</option>
-      </select>
-      <input type="date" id="esc-flt-dt" style="width:auto;font-size:12px">
-    </div>
-  </div>
-  <div id="escorte-list"></div>
-</div>
-
-</body></html>`;const w=window.open('','_blank','width=850,height=650');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),500);}}
+function printRpt(){const r=D.rapports[curRptDate];if(!r)return;const chef=gOp(r.chef);const chefL=chef?chef.grade+' '+chef.nom+' '+chef.prenom:'Non désigné';const evs=(r.evenements||[]).slice().sort((a,b)=>a.heure.localeCompare(b.heure));const ops=tOps(r.equipe);const html=`<html><head><title>Rapport JOCC ${fmt(curRptDate)}</title><style>body{font-family:Arial,sans-serif;font-size:13px;padding:30px;max-width:800px}h1{font-size:16px;border-bottom:2px solid #0d2035;padding-bottom:8px;margin-bottom:16px;color:#0d2035}h2{font-size:13px;font-weight:bold;margin:14px 0 6px;color:#0d2035;border-bottom:1px solid #ddd;padding-bottom:3px}table{width:100%;border-collapse:collapse}th{background:#0d2035;color:#fff;padding:5px 8px;font-size:12px;text-align:left}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:12px}.meta{display:flex;gap:20px;font-size:12px;margin-bottom:14px;padding:10px;background:#f0f4f8}</style></head><body><h1>RAPPORT DE QUART — JOCC / Préfecture Maritime du Bénin</h1><div class="meta"><div>Date : <strong>${fmt(curRptDate)}</strong></div><div>Équipe : <strong>${r.equipe}</strong></div><div>Responsable : <strong>${chefL}</strong></div></div><h2>Équipe</h2><table><tr><th>Nom</th><th>Grade</th><th>Poste</th></tr>${ops.map(o=>`<tr><td>${o.nom} ${o.prenom}</td><td>${o.grade}</td><td>${POSTES[o.poste]||o.poste}</td></tr>`).join('')}</table><h2>Observations</h2><p style="font-size:12px">${r.observations||'Aucune observation particulière.'}</p><h2>Main courante — ${evs.length} événement(s)</h2><table><tr><th style="width:55px">Heure</th><th style="width:80px">Type</th><th>Description</th></tr>${evs.map(e=>`<tr><td>${e.heure}</td><td>${EV_L[e.type]}</td><td>${e.description}</td></tr>`).join('')}${!evs.length?'<tr><td colspan="3" style="text-align:center;color:#999">Aucun événement</td></tr>':''}</table><p style="font-size:10px;color:#999;margin-top:20px;border-top:1px solid #eee;padding-top:8px">Généré le ${new Date().toLocaleString('fr-FR')} — JOCC / Préfecture Maritime — République du Bénin</p><\/body><\/html>`;const w=window.open('','_blank','width=850,height=650');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),500);}}
 
 function renderAbs(){const tbody=document.getElementById('abs-body');const abs=D.absences||[];tbody.innerHTML='';if(!abs.length){tbody.innerHTML='<tr><td colspan="8"><div class="empty">Aucune absence</div></td></tr>';return;}abs.slice().sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).forEach(a=>{const op=gOp(a.operateurId);const opL=op?op.grade+' '+op.nom+' '+op.prenom:'Inconnu';const opTeam=op?tBadge(op.equipe):'';const jours=dBetween(a.dateDebut,a.dateFin);const st=a.statut||'attente';const tr=document.createElement('tr');tr.innerHTML=`<td>${opL}</td><td class="hide-mob">${opTeam}</td><td>${MOTIFS[a.motif]||a.motif}</td><td>${fmt(a.dateDebut)}</td><td class="hide-mob">${fmt(a.dateFin)}</td><td class="hide-mob">${jours}j</td><td><select style="width:auto;padding:3px 6px;font-size:11px" onchange="updAbs('${a.id}',this.value)"><option value="attente" ${st==='attente'?'selected':''}>En attente</option><option value="valide" ${st==='valide'?'selected':''}>Validé</option><option value="refuse" ${st==='refuse'?'selected':''}>Refusé</option></select></td><td><button class="btn btn-danger" style="padding:2px 7px;font-size:10px" onclick="delAbs('${a.id}')">×</button></td>`;tbody.appendChild(tr);});}
 function fillAbsOps(){const sel=document.getElementById('abs-op');sel.innerHTML='';D.operators.filter(o=>o.actif).sort((a,b)=>a.equipe.localeCompare(b.equipe)||a.nom.localeCompare(b.nom)).forEach(o=>{const opt=document.createElement('option');opt.value=o.id;opt.textContent=`Éq.${o.equipe} — ${o.grade} ${o.nom} ${o.prenom}`;sel.appendChild(opt);});}
@@ -923,144 +649,7 @@ function renderFichiers(){renderConsignes();renderSurveillance();}
 function renderConsignes(){const list=document.getElementById('consignes-list');if(!D.consignes||!D.consignes.length){list.innerHTML='<div class="empty">Aucune consigne</div>';return;}list.innerHTML=D.consignes.slice().reverse().map(c=>`<div class="file-item"><div class="flex" style="flex:1;min-width:0"><div style="width:30px;height:30px;border-radius:6px;background:#e6f1fb;color:#0c447c;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">📄</div><div style="min-width:0"><div style="font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.titre}</div><div style="font-size:11px;color:var(--color-text-secondary)">${c.desc||''}</div><div class="flex" style="margin-top:3px;gap:5px"><span class="badge ${PRIO_C[c.priorite]||'bi'}" style="font-size:9px">${PRIO_L[c.priorite]||'Normale'}</span><span style="font-size:10px;color:var(--color-text-secondary)">${fmt(c.date)}</span>${c.fileData?`<span style="font-size:10px;color:#0c447c;cursor:pointer" onclick="dlFile('${c.id}')">Télécharger</span>`:''}</div></div></div><button class="btn btn-danger" style="font-size:10px;padding:2px 7px;flex-shrink:0" onclick="delConsigne('${c.id}')">×</button></div>`).join('');}
 function renderSurveillance(){const list=document.getElementById('surveillance-list');if(!D.captures||!D.captures.length){list.innerHTML='<div class="empty">Aucune capture</div>';return;}list.innerHTML=D.captures.slice().reverse().map(cap=>`<div class="file-item" style="align-items:flex-start"><img src="${cap.dataUrl}" style="width:50px;height:38px;object-fit:cover;border-radius:4px;flex-shrink:0;border:0.5px solid var(--color-border-tertiary)"><div style="flex:1;min-width:0;margin-left:7px"><div style="font-weight:600;font-size:12px">${SRCS[cap.source]||cap.source}</div><div style="font-size:11px;color:var(--color-text-secondary)">${cap.comment||''}</div><div style="font-size:10px;color:var(--color-text-secondary)">${new Date(cap.ts).toLocaleString('fr-FR')}</div></div><div class="flex" style="flex-shrink:0"><button class="btn" style="font-size:10px;padding:2px 7px" onclick="viewCap('${cap.id}')">Voir</button><button class="btn btn-danger" style="font-size:10px;padding:2px 7px" onclick="delCap('${cap.id}')">×</button></div></div>`).join('');}
 function dlFile(id){const c=D.consignes.find(x=>x.id===id);if(!c||!c.fileData)return;const a=document.createElement('a');a.href=c.fileData;a.download=c.fileName;a.click();}
-function viewCap(id){const cap=D.captures.find(x=>x.id===id);if(!cap)return;const w=window.open('','_blank','width=900,height=700');if(w){w.document.write(`<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${cap.dataUrl}" style="max-width:100%;max-height:100vh;object-fit:contain">
-<!-- ═══ ESCORTE ═══ -->
-<div id="tab-escorte" class="tab" style="display:none">
-  <div class="card-dk mb12">
-    <div class="flex-b">
-      <div>
-        <div style="font-size:15px;font-weight:700;letter-spacing:.06em;color:rgba(200,164,74,.9)">⚓ MISSIONS D'ESCORTE</div>
-        <div style="font-size:10px;color:rgba(111,163,200,.7);margin-top:2px">Marine Nationale · Appareillage · Escortes entrante et sortante</div>
-      </div>
-      <button class="btn btn-gold" id="btn-new-escorte">+ Nouvelle mission</button>
-    </div>
-  </div>
-
-  <div id="escorte-form" style="display:none" class="card-section mb12">
-    <div class="card-section-header">
-      <div style="font-size:13px;font-weight:700" id="escorte-form-title">Nouvelle mission d'escorte</div>
-      <button class="btn" id="escorte-cancel">✕ Annuler</button>
-    </div>
-    <div class="card-section-body">
-      <div class="section-lbl">📋 Identification de la mission</div>
-      <div class="g4 mb10">
-        <div class="fg"><label>N° Mission</label><input type="text" id="esc-num" placeholder="ESC-001"></div>
-        <div class="fg"><label>Date</label><input type="date" id="esc-date"></div>
-        <div class="fg"><label>Heure d'appareillage</label><input type="time" id="esc-heure"></div>
-        <div class="fg"><label>Type de mission</label>
-          <select id="esc-type">
-            <option value="entree">Escorte à l'entrée</option>
-            <option value="sortie">Escorte à la sortie</option>
-            <option value="aller-retour">Aller-retour</option>
-          </select>
-        </div>
-        <div class="fg"><label>Zone d'opération</label><input type="text" id="esc-zone" placeholder="Ex: Golfe de Bénin, zone 12nm"></div>
-        <div class="fg"><label>Point de rendez-vous</label><input type="text" id="esc-rdv" placeholder="Lat/Lon ou repère"></div>
-        <div class="fg"><label>Durée estimée</label><input type="text" id="esc-duree" placeholder="Ex: 4h, 12h"></div>
-        <div class="fg"><label>Équipe de quart</label>
-          <select id="esc-equipe"><option>A</option><option>B</option><option>C</option><option>D</option></select>
-        </div>
-      </div>
-
-      <div class="section-lbl">🚢 Navire à escorter</div>
-      <div style="background:rgba(74,127,165,.07);border:1.5px solid rgba(74,127,165,.25);border-radius:10px;padding:12px;margin-bottom:12px">
-        <div class="g3 mb8">
-          <div class="fg"><label>Nom du navire</label><input type="text" id="esc-cible-nom" placeholder="Ex: MV ATLANTIC STAR"></div>
-          <div class="fg"><label>MMSI</label><input type="text" id="esc-cible-mmsi" placeholder="Ex: 636012345"></div>
-          <div class="fg"><label>Numéro IMO</label><input type="text" id="esc-cible-imo" placeholder="Ex: IMO9876543"></div>
-          <div class="fg"><label>Indicatif d'appel</label><input type="text" id="esc-cible-cs" placeholder="Ex: VNAA"></div>
-          <div class="fg"><label>Pavillon</label><input type="text" id="esc-cible-pavillon" placeholder="Ex: Panama, France"></div>
-          <div class="fg"><label>Type de navire</label>
-            <select id="esc-cible-type">
-              <option value="cargo">Cargo</option>
-              <option value="petrolier">Pétrolier / Tanker</option>
-              <option value="vraquier">Vraquier</option>
-              <option value="conteneur">Porte-conteneurs</option>
-              <option value="passagers">Passagers</option>
-              <option value="roro">Ro-Ro</option>
-              <option value="gazier">Gazier</option>
-              <option value="chimquier">Chimiquier</option>
-              <option value="peche">Navire de pêche</option>
-              <option value="remorqueur">Remorqueur</option>
-              <option value="autre">Autre</option>
-            </select>
-          </div>
-          <div class="fg"><label>Longueur LOA (m)</label><input type="number" id="esc-cible-loa" placeholder="185"></div>
-          <div class="fg"><label>Jauge brute (GT)</label><input type="number" id="esc-cible-gt" placeholder="25000"></div>
-          <div class="fg"><label>Tirant d'eau (m)</label><input type="text" id="esc-cible-draft" placeholder="8.5"></div>
-          <div class="fg"><label>Port de provenance</label><input type="text" id="esc-cible-from" placeholder="Ex: Lomé, Lagos"></div>
-          <div class="fg"><label>Port de destination</label><input type="text" id="esc-cible-to" placeholder="Ex: Cotonou, Dakar"></div>
-          <div class="fg"><label>ETA / ETD</label><input type="datetime-local" id="esc-cible-eta"></div>
-        </div>
-        <div class="fg" style="margin-bottom:0"><label>Cargaison / Marchandise</label><input type="text" id="esc-cible-cargo" placeholder="Ex: Produits pétroliers, Conteneurs, Vrac..."></div>
-      </div>
-
-      <div class="section-lbl">🛥 Navire escorteur (Marine Nationale)</div>
-      <div style="background:rgba(200,164,74,.06);border:1.5px solid rgba(200,164,74,.28);border-radius:10px;padding:12px;margin-bottom:12px">
-        <div class="g3 mb8">
-          <div class="fg"><label>Nom du bâtiment</label><input type="text" id="esc-nav-nom" placeholder="Ex: PR SOGLO, PR BENIN"></div>
-          <div class="fg"><label>MMSI</label><input type="text" id="esc-nav-mmsi" placeholder="Ex: 605000001"></div>
-          <div class="fg"><label>Indicatif d'appel</label><input type="text" id="esc-nav-cs" placeholder="Ex: TXAA"></div>
-          <div class="fg"><label>Pavillon</label><input type="text" id="esc-nav-pavillon" placeholder="Bénin"></div>
-          <div class="fg"><label>Type de bâtiment</label>
-            <select id="esc-nav-type">
-              <option value="patrouilleur">Patrouilleur</option>
-              <option value="vedette">Vedette rapide</option>
-              <option value="aviso">Aviso</option>
-              <option value="fregatte">Frégate</option>
-              <option value="corvette">Corvette</option>
-              <option value="bac">Bt. de commandement</option>
-              <option value="autre">Autre</option>
-            </select>
-          </div>
-          <div class="fg"><label>Longueur LOA (m)</label><input type="number" id="esc-nav-loa" placeholder="45"></div>
-          <div class="fg"><label>Commandant</label><input type="text" id="esc-nav-cmd" placeholder="Grade NOM Prénom"></div>
-          <div class="fg"><label>Canal VHF de travail</label><input type="text" id="esc-nav-vhf" placeholder="VHF 16 / CH 12"></div>
-          <div class="fg"><label>Effectif embarqué</label><input type="number" id="esc-nav-effectif" placeholder="12"></div>
-        </div>
-        <div class="fg" style="margin-bottom:0"><label>Armement / Équipements notables</label><input type="text" id="esc-nav-arm" placeholder="Ex: Mitrailleuses 12.7mm, radar ARPA, AIS classe A..."></div>
-      </div>
-
-      <div class="fg"><label>Observations / Instructions particulières</label>
-        <textarea id="esc-comment" rows="3" placeholder="Ex: Menace piraterie signalée, coordination autorités portuaires, règles d'engagement..."></textarea>
-      </div>
-      <input type="hidden" id="esc-edit-id">
-      <div class="flex">
-        <button class="btn btn-gold" id="esc-save">✔ Enregistrer la mission</button>
-        <button class="btn" id="esc-cancel2">✕ Annuler</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="g4 mb10">
-    <div class="stat"><div class="stat-l">Total missions</div><div class="stat-v" id="esg-total">0</div></div>
-    <div class="stat"><div class="stat-l">En cours</div><div class="stat-v" id="esg-encours" style="color:#27ae60">0</div></div>
-    <div class="stat"><div class="stat-l">Planifiées</div><div class="stat-v" id="esg-plan" style="color:rgba(200,164,74,.9)">0</div></div>
-    <div class="stat"><div class="stat-l">Terminées</div><div class="stat-v" id="esg-done">0</div></div>
-  </div>
-  <div class="flex-b mb10">
-    <div style="font-size:12px;font-weight:700;letter-spacing:.05em" id="esc-count-lbl"></div>
-    <div class="flex">
-      <select id="esc-flt-st" style="width:auto;font-size:12px">
-        <option value="">Tous statuts</option>
-        <option value="planifiee">Planifiée</option>
-        <option value="encours">En cours</option>
-        <option value="terminee">Terminée</option>
-        <option value="annulee">Annulée</option>
-      </select>
-      <select id="esc-flt-ty" style="width:auto;font-size:12px">
-        <option value="">Tous types</option>
-        <option value="entree">Entrée</option>
-        <option value="sortie">Sortie</option>
-        <option value="aller-retour">Aller-retour</option>
-      </select>
-      <input type="date" id="esc-flt-dt" style="width:auto;font-size:12px">
-    </div>
-  </div>
-  <div id="escorte-list"></div>
-</div>
-
-</body></html>`);w.document.close();}}
+function viewCap(id){const cap=D.captures.find(x=>x.id===id);if(!cap)return;const w=window.open('','_blank','width=900,height=700');if(w){w.document.write(`<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${cap.dataUrl}" style="max-width:100%;max-height:100vh;object-fit:contain"><\/body><\/html>`);w.document.close();}}
 async function delConsigne(id){if(!confirm('Supprimer ?'))return;D.consignes=D.consignes.filter(c=>c.id!==id);await sv();renderConsignes();}
 async function delCap(id){if(!confirm('Supprimer ?'))return;D.captures=D.captures.filter(c=>c.id!==id);await sv();renderSurveillance();}
 function rfDU(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(file);});}
@@ -1099,335 +688,330 @@ document.getElementById('surv-file').addEventListener('change',async function(){
 document.getElementById('surv-save').addEventListener('click',async function(){if(!survFD){alert('Aucune image');return;}const source=document.getElementById('surv-source').value;const comment=document.getElementById('surv-comment').value.trim();D.captures.push({id:gid(),source,comment,dataUrl:survFD.dataUrl,ts:new Date().toISOString()});pushN('rapport','Capture '+SRCS[source]+' ajoutée',comment);await sv();document.getElementById('surv-meta-form').style.display='none';document.getElementById('surv-preview').style.display='none';survFD=null;document.getElementById('surv-comment').value='';renderSurveillance();});
 document.getElementById('surv-cancel').addEventListener('click',()=>{document.getElementById('surv-meta-form').style.display='none';document.getElementById('surv-preview').style.display='none';survFD=null;});
 document.getElementById('rpt-date').value=tod();
-load().then(()=>showTab('dashboard'));
 
-var ESC_TY_L = {entree:'Escorte entrée', sortie:'Escorte sortie', 'aller-retour':'Aller-retour'};
-var ESC_ST_L = {planifiee:'Planifiée', encours:'En cours', terminee:'Terminée', annulee:'Annulée'};
-var ESC_ST_C = {planifiee:'bgold', encours:'bv', terminee:'bi', annulee:'br'};
-var ESC_ST_I = {planifiee:'📅', encours:'⚓', terminee:'✔', annulee:'✕'};
-var CIBLE_TY = {cargo:'Cargo', petrolier:'Pétrolier/Tanker', vraquier:'Vraquier', conteneur:'Porte-cont.', passagers:'Passagers', roro:'Ro-Ro', gazier:'Gazier', chimquier:'Chimiquier', peche:'Pêche', remorqueur:'Remorqueur', autre:'Autre'};
-var NAV_TY = {patrouilleur:'Patrouilleur', vedette:'Vedette rapide', aviso:'Aviso', fregatte:'Frégate', corvette:'Corvette', bac:'Bt. commandement', autre:'Autre'};
+// ══════════ MODULE ESCORTE ══════════
+var ESC_TY_L={entree:'Escorte entrée',sortie:'Escorte sortie','aller-retour':'Aller-retour'};
+var ESC_ST_L={planifiee:'Planifiée',encours:'En cours',terminee:'Terminée',annulee:'Annulée'};
+var ESC_ST_C={planifiee:'bgold',encours:'bv',terminee:'bi',annulee:'br'};
+var ESC_ST_I={planifiee:'📅',encours:'⚓',terminee:'✔',annulee:'✕'};
+var CIBLE_TY={cargo:'Cargo',petrolier:'Pétrolier/Tanker',vraquier:'Vraquier',conteneur:'Porte-cont.',passagers:'Passagers',roro:'Ro-Ro',gazier:'Gazier',chimquier:'Chimiquier',peche:'Pêche',remorqueur:'Remorqueur',autre:'Autre'};
+var NAV_TY={patrouilleur:'Patrouilleur',vedette:'Vedette rapide',aviso:'Aviso',fregatte:'Frégate',corvette:'Corvette',bac:'Bt. commandement',autre:'Autre'};
 
-function renderEscorte() {
-  if (!D.escortes) D.escortes = [];
-  var fSt = (document.getElementById('esc-flt-st') || {}).value || '';
-  var fTy = (document.getElementById('esc-flt-ty') || {}).value || '';
-  var fDt = (document.getElementById('esc-flt-dt') || {}).value || '';
-  var list = D.escortes.slice().sort(function(a, b) {
-    return b.date.localeCompare(a.date) || b.heure.localeCompare(a.heure);
+function renderEscorte(){
+  if(!D.escortes)D.escortes=[];
+  var fSt=(document.getElementById('esc-flt-st')||{}).value||'';
+  var fTy=(document.getElementById('esc-flt-ty')||{}).value||'';
+  var fDt=(document.getElementById('esc-flt-dt')||{}).value||'';
+  var list=D.escortes.slice().sort(function(a,b){
+    var dc=b.date.localeCompare(a.date);
+    return dc!==0?dc:b.heure.localeCompare(a.heure);
   });
-  if (fSt) list = list.filter(function(e) { return e.statut === fSt; });
-  if (fTy) list = list.filter(function(e) { return e.type === fTy; });
-  if (fDt) list = list.filter(function(e) { return e.date === fDt; });
-  document.getElementById('esc-count-lbl').textContent = list.length + ' mission(s)';
-  document.getElementById('esg-total').textContent = D.escortes.length;
-  document.getElementById('esg-encours').textContent = D.escortes.filter(function(e) { return e.statut === 'encours'; }).length;
-  document.getElementById('esg-plan').textContent = D.escortes.filter(function(e) { return e.statut === 'planifiee'; }).length;
-  document.getElementById('esg-done').textContent = D.escortes.filter(function(e) { return e.statut === 'terminee'; }).length;
-  if (!list.length) {
-    document.getElementById('escorte-list').innerHTML = '<div class="empty">Aucune mission d\'escorte — cliquez sur "+ Nouvelle mission" pour commencer</div>';
+  if(fSt)list=list.filter(function(e){return e.statut===fSt;});
+  if(fTy)list=list.filter(function(e){return e.type===fTy;});
+  if(fDt)list=list.filter(function(e){return e.date===fDt;});
+  document.getElementById('esc-count-lbl').textContent=list.length+' mission(s)';
+  document.getElementById('esg-total').textContent=D.escortes.length;
+  document.getElementById('esg-encours').textContent=D.escortes.filter(function(e){return e.statut==='encours';}).length;
+  document.getElementById('esg-plan').textContent=D.escortes.filter(function(e){return e.statut==='planifiee';}).length;
+  document.getElementById('esg-done').textContent=D.escortes.filter(function(e){return e.statut==='terminee';}).length;
+  if(!list.length){
+    document.getElementById('escorte-list').innerHTML='<div class="empty">Aucune mission enregistrée — cliquez sur "+ Nouvelle mission"</div>';
     return;
   }
-  document.getElementById('escorte-list').innerHTML = list.map(function(e) { return escorteCard(e); }).join('');
+  var html='';
+  list.forEach(function(e){html+=buildEscCard(e);});
+  document.getElementById('escorte-list').innerHTML=html;
 }
 
-function escRow(l, v) {
-  if (!v) return '';
-  return '<div style="padding:3px 0;font-size:11px"><span style="color:var(--color-text-secondary)">' + l + ' : </span><strong>' + v + '</strong></div>';
+function eRow(l,v){
+  if(!v)return'';
+  return '<div style="padding:3px 0;font-size:11px"><span style="color:var(--color-text-secondary)">'+l+' : </span><strong>'+v+'</strong></div>';
 }
-function escMetaBox(l, v) {
-  if (!v) return '<div></div>';
-  return '<div style="background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:6px;padding:5px 8px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-secondary)">' + l + '</div><div style="font-weight:600;font-size:11px;margin-top:2px">' + v + '</div></div>';
-}
-
-function escorteCard(e) {
-  var sc = ESC_ST_C[e.statut] || 'bi';
-  var si = ESC_ST_I[e.statut] || '';
-  var sl = ESC_ST_L[e.statut] || e.statut;
-  var opts = ['planifiee','encours','terminee','annulee'].map(function(s) {
-    return '<option value="' + s + '"' + (e.statut === s ? ' selected' : '') + '>' + ESC_ST_I[s] + ' ' + ESC_ST_L[s] + '</option>';
-  }).join('');
-  return '<div class="card-section mb10">'
-    + '<div class="card-section-header">'
-    + '<div class="flex">'
-    + '<div style="background:linear-gradient(135deg,rgba(13,32,53,.9),rgba(26,46,74,.8));border:1.5px solid rgba(200,164,74,.4);border-radius:8px;padding:4px 11px;font-family:monospace;font-size:13px;font-weight:700;color:rgba(200,164,74,.9)">' + (e.num || 'ESC') + '</div>'
-    + '<div>'
-    + '<div style="font-weight:700;font-size:13px">' + (e.cible_nom || 'Navire N/A') + ' <span style="font-weight:400;font-size:11px;color:var(--color-text-secondary)">↔ ' + (e.nav_nom || 'Escorteur N/A') + '</span></div>'
-    + '<div style="font-size:11px;color:var(--color-text-secondary)">' + fmt(e.date) + ' · App. ' + (e.heure || '—') + ' · ' + (ESC_TY_L[e.type] || e.type) + '</div>'
-    + '</div></div>'
-    + '<div class="flex">'
-    + '<span class="badge ' + sc + '">' + si + ' ' + sl + '</span>'
-    + '<select style="font-size:11px;padding:3px 7px;width:auto" onchange="updEscStatut('' + e.id + '',this.value)">' + opts + '</select>'
-    + '</div></div>'
-    + '<div class="card-section-body">'
-    + '<div class="g2" style="gap:12px">'
-    + '<div>'
-    + '<div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(74,127,165,.9);margin-bottom:8px">🚢 Navire à escorter</div>'
-    + '<div style="background:rgba(74,127,165,.07);border:1px solid rgba(74,127,165,.2);border-radius:8px;padding:10px">'
-    + '<div style="font-size:14px;font-weight:700;margin-bottom:6px">' + (e.cible_nom || '—') + '</div>'
-    + escRow('MMSI', e.cible_mmsi)
-    + escRow('IMO', e.cible_imo)
-    + escRow('Indicatif', e.cible_cs)
-    + escRow('Pavillon', e.cible_pavillon)
-    + escRow('Type', CIBLE_TY[e.cible_type] || e.cible_type)
-    + escRow('LOA', e.cible_loa ? e.cible_loa + ' m' : '')
-    + escRow('GT', e.cible_gt ? Number(e.cible_gt).toLocaleString('fr-FR') : '')
-    + escRow('Tirant d'eau', e.cible_draft ? e.cible_draft + ' m' : '')
-    + escRow('Provenance', e.cible_from)
-    + escRow('Destination', e.cible_to)
-    + escRow('Cargaison', e.cible_cargo)
-    + '</div></div>'
-    + '<div>'
-    + '<div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(200,164,74,.9);margin-bottom:8px">🛥 Navire escorteur</div>'
-    + '<div style="background:rgba(200,164,74,.06);border:1px solid rgba(200,164,74,.25);border-radius:8px;padding:10px">'
-    + '<div style="font-size:14px;font-weight:700;margin-bottom:6px;color:rgba(200,164,74,.9)">' + (e.nav_nom || '—') + '</div>'
-    + escRow('MMSI', e.nav_mmsi)
-    + escRow('Indicatif', e.nav_cs)
-    + escRow('Pavillon', e.nav_pavillon || 'Bénin')
-    + escRow('Type', NAV_TY[e.nav_type] || e.nav_type)
-    + escRow('LOA', e.nav_loa ? e.nav_loa + ' m' : '')
-    + escRow('Commandant', e.nav_cmd)
-    + escRow('VHF', e.nav_vhf)
-    + escRow('Effectif', e.nav_effectif ? e.nav_effectif + ' pers.' : '')
-    + escRow('Armement', e.nav_arm)
-    + '</div></div></div>'
-    + '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--color-border-tertiary);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px">'
-    + escMetaBox('Zone', e.zone)
-    + escMetaBox('Rendez-vous', e.rdv)
-    + escMetaBox('Durée estimée', e.duree)
-    + escMetaBox('Équipe', e.equipe ? 'Équipe ' + e.equipe : '')
-    + '</div>'
-    + (e.comment ? '<div style="margin-top:10px;background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:7px;padding:9px;font-size:12px"><span style="font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-secondary)">Observations — </span>' + e.comment + '</div>' : '')
-    + '<div class="flex" style="margin-top:10px;justify-content:flex-end">'
-    + '<button class="btn btn-info" style="font-size:10px;padding:3px 9px" onclick="printEscorte('' + e.id + '')">🖨 OPLAN</button>'
-    + '<button class="btn btn-gold" style="font-size:10px;padding:3px 9px" onclick="editEscorte('' + e.id + '')">✏ Modifier</button>'
-    + '<button class="btn btn-danger" style="font-size:10px;padding:3px 9px" onclick="delEscorte('' + e.id + '')">🗑 Supprimer</button>'
-    + '</div></div></div>';
+function eMeta(l,v){
+  if(!v)return'<div></div>';
+  return '<div style="background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:6px;padding:5px 8px">'
+    +'<div style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-secondary)">'+l+'</div>'
+    +'<div style="font-weight:600;font-size:11px;margin-top:2px">'+v+'</div></div>';
 }
 
-function openEscorteForm(reset) {
-  document.getElementById('escorte-form').style.display = 'block';
-  if (reset) {
-    document.getElementById('escorte-form-title').textContent = 'Nouvelle mission d\'escorte';
-    var n = (D.escortes || []).length + 1;
-    var numStr = 'ESC-' + (n < 10 ? '00' : n < 100 ? '0' : '') + n;
-    document.getElementById('esc-num').value = numStr;
-    document.getElementById('esc-date').value = tod();
-    document.getElementById('esc-heure').value = nowT();
-    document.getElementById('esc-equipe').value = getTeam(tod());
-    document.getElementById('esc-type').value = 'entree';
-    document.getElementById('esc-nav-pavillon').value = 'Bénin';
-    ['esc-zone','esc-rdv','esc-duree','esc-cible-nom','esc-cible-mmsi','esc-cible-imo','esc-cible-cs','esc-cible-pavillon','esc-cible-loa','esc-cible-gt','esc-cible-draft','esc-cible-from','esc-cible-to','esc-cible-cargo','esc-cible-eta','esc-nav-nom','esc-nav-mmsi','esc-nav-cs','esc-nav-loa','esc-nav-cmd','esc-nav-vhf','esc-nav-effectif','esc-nav-arm','esc-comment'].forEach(function(id) {
-      var el = document.getElementById(id);
-      if (el) el.value = '';
-    });
-    document.getElementById('esc-edit-id').value = '';
-  }
-  document.getElementById('escorte-form').scrollIntoView({behavior:'smooth', block:'start'});
-}
-
-function editEscorte(id) {
-  var e = (D.escortes || []).find(function(x) { return x.id === id; });
-  if (!e) return;
-  document.getElementById('escorte-form-title').textContent = 'Modifier — Mission ' + e.num;
-  var fields = {
-    'esc-num': e.num, 'esc-date': e.date, 'esc-heure': e.heure,
-    'esc-zone': e.zone, 'esc-rdv': e.rdv, 'esc-duree': e.duree,
-    'esc-cible-nom': e.cible_nom, 'esc-cible-mmsi': e.cible_mmsi,
-    'esc-cible-imo': e.cible_imo, 'esc-cible-cs': e.cible_cs,
-    'esc-cible-pavillon': e.cible_pavillon, 'esc-cible-loa': e.cible_loa,
-    'esc-cible-gt': e.cible_gt, 'esc-cible-draft': e.cible_draft,
-    'esc-cible-from': e.cible_from, 'esc-cible-to': e.cible_to,
-    'esc-cible-eta': e.cible_eta, 'esc-cible-cargo': e.cible_cargo,
-    'esc-nav-nom': e.nav_nom, 'esc-nav-mmsi': e.nav_mmsi,
-    'esc-nav-cs': e.nav_cs, 'esc-nav-pavillon': e.nav_pavillon,
-    'esc-nav-loa': e.nav_loa, 'esc-nav-cmd': e.nav_cmd,
-    'esc-nav-vhf': e.nav_vhf, 'esc-nav-effectif': e.nav_effectif,
-    'esc-nav-arm': e.nav_arm, 'esc-comment': e.comment
-  };
-  Object.keys(fields).forEach(function(k) {
-    var el = document.getElementById(k);
-    if (el && fields[k]) el.value = fields[k];
+function buildEscCard(e){
+  var sc=ESC_ST_C[e.statut]||'bi';
+  var sl=ESC_ST_L[e.statut]||e.statut;
+  var si=ESC_ST_I[e.statut]||'';
+  var opts='';
+  ['planifiee','encours','terminee','annulee'].forEach(function(s){
+    opts+='<option value="'+s+'"'+(e.statut===s?' selected':'')+'>'+ESC_ST_I[s]+' '+ESC_ST_L[s]+'</option>';
   });
-  document.getElementById('esc-type').value = e.type || 'entree';
-  document.getElementById('esc-equipe').value = e.equipe || 'A';
-  document.getElementById('esc-cible-type').value = e.cible_type || 'cargo';
-  document.getElementById('esc-nav-type').value = e.nav_type || 'patrouilleur';
-  document.getElementById('esc-edit-id').value = id;
-  document.getElementById('escorte-form').style.display = 'block';
-  document.getElementById('escorte-form').scrollIntoView({behavior:'smooth', block:'start'});
+  var card=document.createElement('div');
+  card.className='card-section mb10';
+  var header=''
+    +'<div class="card-section-header">'
+    +'<div class="flex">'
+    +'<div style="background:linear-gradient(135deg,rgba(13,32,53,.9),rgba(26,46,74,.8));border:1.5px solid rgba(200,164,74,.4);border-radius:8px;padding:4px 11px;font-family:monospace;font-size:13px;font-weight:700;color:rgba(200,164,74,.9)">'+(e.num||'ESC')+'</div>'
+    +'<div><div style="font-weight:700;font-size:13px">'+(e.cible_nom||'Navire N/A')
+    +' <span style="font-weight:400;font-size:11px;color:var(--color-text-secondary)">&#8596; '+(e.nav_nom||'Escorteur N/A')+'</span></div>'
+    +'<div style="font-size:11px;color:var(--color-text-secondary)">'+fmt(e.date)+' &middot; App. '+(e.heure||'&mdash;')+' &middot; '+(ESC_TY_L[e.type]||e.type)+'</div>'
+    +'</div></div>'
+    +'<div class="flex"><span class="badge '+sc+'">'+si+' '+sl+'</span>'
+    +'<select style="font-size:11px;padding:3px 7px;width:auto" onchange="updEscStatut(\''+e.id+'\',this.value)">'+opts+'</select>'
+    +'</div></div>';
+  var cibleBox=''
+    +'<div><div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(74,127,165,.9);margin-bottom:8px">&#x1F6A2; Navire à escorter</div>'
+    +'<div style="background:rgba(74,127,165,.07);border:1px solid rgba(74,127,165,.2);border-radius:8px;padding:10px">'
+    +'<div style="font-size:14px;font-weight:700;margin-bottom:6px">'+(e.cible_nom||'&mdash;')+'</div>'
+    +eRow('MMSI',e.cible_mmsi)+eRow('IMO',e.cible_imo)+eRow('Indicatif',e.cible_cs)
+    +eRow('Pavillon',e.cible_pavillon)+eRow('Type',CIBLE_TY[e.cible_type]||e.cible_type)
+    +eRow('LOA',e.cible_loa?e.cible_loa+' m':'')
+    +eRow('GT',e.cible_gt?Number(e.cible_gt).toLocaleString('fr-FR'):'')
+    +eRow('Tirant',e.cible_draft?e.cible_draft+' m':'')
+    +eRow('De',e.cible_from)+eRow('Vers',e.cible_to)+eRow('Cargaison',e.cible_cargo)
+    +'</div></div>';
+  var navBox=''
+    +'<div><div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(200,164,74,.9);margin-bottom:8px">&#x26F5; Navire escorteur</div>'
+    +'<div style="background:rgba(200,164,74,.06);border:1px solid rgba(200,164,74,.25);border-radius:8px;padding:10px">'
+    +'<div style="font-size:14px;font-weight:700;margin-bottom:6px;color:rgba(200,164,74,.9)">'+(e.nav_nom||'&mdash;')+'</div>'
+    +eRow('MMSI',e.nav_mmsi)+eRow('Indicatif',e.nav_cs)
+    +eRow('Pavillon',e.nav_pavillon||'Bénin')+eRow('Type',NAV_TY[e.nav_type]||e.nav_type)
+    +eRow('LOA',e.nav_loa?e.nav_loa+' m':'')
+    +eRow('Commandant',e.nav_cmd)+eRow('VHF',e.nav_vhf)
+    +eRow('Effectif',e.nav_effectif?e.nav_effectif+' pers.':'')
+    +eRow('Armement',e.nav_arm)
+    +'</div></div>';
+  var metaRow=''
+    +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--color-border-tertiary);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px">'
+    +eMeta('Zone',e.zone)+eMeta('Rendez-vous',e.rdv)+eMeta('Durée',e.duree)
+    +eMeta('Équipe',e.equipe?'Équipe '+e.equipe:'')
+    +'</div>';
+  var obsRow=e.comment
+    ?'<div style="margin-top:10px;background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:7px;padding:9px;font-size:12px">'
+      +'<span style="font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-secondary)">Observations &mdash; </span>'+e.comment+'</div>'
+    :'';
+  var actions=''
+    +'<div class="flex" style="margin-top:10px;justify-content:flex-end">'
+    +'<button class="btn btn-info" style="font-size:10px;padding:3px 9px" onclick="printEsc(\''+e.id+'\')">&#x1F5A8; OPLAN</button>'
+    +'<button class="btn btn-gold" style="font-size:10px;padding:3px 9px" onclick="editEsc(\''+e.id+'\')">&#x270F; Modifier</button>'
+    +'<button class="btn btn-danger" style="font-size:10px;padding:3px 9px" onclick="delEsc(\''+e.id+'\')">&#x1F5D1; Supprimer</button>'
+    +'</div>';
+  card.innerHTML=header
+    +'<div class="card-section-body">'
+    +'<div class="g2" style="gap:12px">'+cibleBox+navBox+'</div>'
+    +metaRow+obsRow+actions
+    +'</div>';
+  return card.outerHTML;
 }
 
-async function saveEscorte() {
-  var num = document.getElementById('esc-num').value.trim();
-  var nom_cible = document.getElementById('esc-cible-nom').value.trim();
-  if (!num || !nom_cible) {
-    alert('Le numéro de mission et le nom du navire à escorter sont obligatoires');
-    return;
+function openEscForm(reset){
+  document.getElementById('escorte-form').style.display='block';
+  if(reset){
+    document.getElementById('escorte-form-title').textContent="Nouvelle mission d'escorte";
+    var n=(D.escortes||[]).length+1;
+    var ns='ESC-'+(n<10?'00':n<100?'0':'')+n;
+    document.getElementById('esc-num').value=ns;
+    document.getElementById('esc-date').value=tod();
+    document.getElementById('esc-heure').value=nowT();
+    document.getElementById('esc-equipe').value=getTeam(tod());
+    document.getElementById('esc-type').value='entree';
+    document.getElementById('esc-nav-pavillon').value='Bénin';
+    ['esc-zone','esc-rdv','esc-duree',
+     'esc-cible-nom','esc-cible-mmsi','esc-cible-imo','esc-cible-cs','esc-cible-pavillon',
+     'esc-cible-loa','esc-cible-gt','esc-cible-draft','esc-cible-from','esc-cible-to',
+     'esc-cible-cargo','esc-cible-eta',
+     'esc-nav-nom','esc-nav-mmsi','esc-nav-cs','esc-nav-loa',
+     'esc-nav-cmd','esc-nav-vhf','esc-nav-effectif','esc-nav-arm','esc-comment'
+    ].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+    document.getElementById('esc-edit-id').value='';
   }
-  var e = {
-    id: document.getElementById('esc-edit-id').value || gid(),
-    num: num,
-    date: document.getElementById('esc-date').value,
-    heure: document.getElementById('esc-heure').value,
-    type: document.getElementById('esc-type').value,
-    equipe: document.getElementById('esc-equipe').value,
-    zone: document.getElementById('esc-zone').value,
-    rdv: document.getElementById('esc-rdv').value,
-    duree: document.getElementById('esc-duree').value,
-    cible_nom: nom_cible.toUpperCase(),
-    cible_mmsi: document.getElementById('esc-cible-mmsi').value,
-    cible_imo: document.getElementById('esc-cible-imo').value,
-    cible_cs: document.getElementById('esc-cible-cs').value,
-    cible_pavillon: document.getElementById('esc-cible-pavillon').value,
-    cible_type: document.getElementById('esc-cible-type').value,
-    cible_loa: document.getElementById('esc-cible-loa').value,
-    cible_gt: document.getElementById('esc-cible-gt').value,
-    cible_draft: document.getElementById('esc-cible-draft').value,
-    cible_from: document.getElementById('esc-cible-from').value,
-    cible_to: document.getElementById('esc-cible-to').value,
-    cible_eta: document.getElementById('esc-cible-eta').value,
-    cible_cargo: document.getElementById('esc-cible-cargo').value,
-    nav_nom: document.getElementById('esc-nav-nom').value.toUpperCase(),
-    nav_mmsi: document.getElementById('esc-nav-mmsi').value,
-    nav_cs: document.getElementById('esc-nav-cs').value,
-    nav_pavillon: document.getElementById('esc-nav-pavillon').value,
-    nav_type: document.getElementById('esc-nav-type').value,
-    nav_loa: document.getElementById('esc-nav-loa').value,
-    nav_cmd: document.getElementById('esc-nav-cmd').value,
-    nav_vhf: document.getElementById('esc-nav-vhf').value,
-    nav_effectif: document.getElementById('esc-nav-effectif').value,
-    nav_arm: document.getElementById('esc-nav-arm').value,
-    comment: document.getElementById('esc-comment').value,
-    statut: 'planifiee',
-    ts: new Date().toISOString()
+  document.getElementById('escorte-form').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function editEsc(id){
+  var e=(D.escortes||[]).find(function(x){return x.id===id;});
+  if(!e)return;
+  document.getElementById('escorte-form-title').textContent='Modifier — Mission '+e.num;
+  var flds={
+    'esc-num':e.num,'esc-date':e.date,'esc-heure':e.heure,
+    'esc-zone':e.zone,'esc-rdv':e.rdv,'esc-duree':e.duree,
+    'esc-cible-nom':e.cible_nom,'esc-cible-mmsi':e.cible_mmsi,'esc-cible-imo':e.cible_imo,
+    'esc-cible-cs':e.cible_cs,'esc-cible-pavillon':e.cible_pavillon,
+    'esc-cible-loa':e.cible_loa,'esc-cible-gt':e.cible_gt,'esc-cible-draft':e.cible_draft,
+    'esc-cible-from':e.cible_from,'esc-cible-to':e.cible_to,
+    'esc-cible-eta':e.cible_eta,'esc-cible-cargo':e.cible_cargo,
+    'esc-nav-nom':e.nav_nom,'esc-nav-mmsi':e.nav_mmsi,'esc-nav-cs':e.nav_cs,
+    'esc-nav-pavillon':e.nav_pavillon,'esc-nav-loa':e.nav_loa,
+    'esc-nav-cmd':e.nav_cmd,'esc-nav-vhf':e.nav_vhf,
+    'esc-nav-effectif':e.nav_effectif,'esc-nav-arm':e.nav_arm,'esc-comment':e.comment
   };
-  if (!D.escortes) D.escortes = [];
-  var eid = document.getElementById('esc-edit-id').value;
-  if (eid) {
-    var idx = D.escortes.findIndex(function(x) { return x.id === eid; });
-    if (idx >= 0) { e.statut = D.escortes[idx].statut; D.escortes[idx] = e; }
+  Object.keys(flds).forEach(function(k){var el=document.getElementById(k);if(el&&flds[k])el.value=flds[k];});
+  document.getElementById('esc-type').value=e.type||'entree';
+  document.getElementById('esc-equipe').value=e.equipe||'A';
+  document.getElementById('esc-cible-type').value=e.cible_type||'cargo';
+  document.getElementById('esc-nav-type').value=e.nav_type||'patrouilleur';
+  document.getElementById('esc-edit-id').value=id;
+  document.getElementById('escorte-form').style.display='block';
+  document.getElementById('escorte-form').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+async function saveEsc(){
+  var num=document.getElementById('esc-num').value.trim();
+  var cnom=document.getElementById('esc-cible-nom').value.trim();
+  if(!num||!cnom){alert('Le numéro de mission et le nom du navire à escorter sont obligatoires');return;}
+  var e={
+    id:document.getElementById('esc-edit-id').value||gid(),
+    num:num,date:document.getElementById('esc-date').value,
+    heure:document.getElementById('esc-heure').value,
+    type:document.getElementById('esc-type').value,
+    equipe:document.getElementById('esc-equipe').value,
+    zone:document.getElementById('esc-zone').value,
+    rdv:document.getElementById('esc-rdv').value,
+    duree:document.getElementById('esc-duree').value,
+    cible_nom:cnom.toUpperCase(),
+    cible_mmsi:document.getElementById('esc-cible-mmsi').value,
+    cible_imo:document.getElementById('esc-cible-imo').value,
+    cible_cs:document.getElementById('esc-cible-cs').value,
+    cible_pavillon:document.getElementById('esc-cible-pavillon').value,
+    cible_type:document.getElementById('esc-cible-type').value,
+    cible_loa:document.getElementById('esc-cible-loa').value,
+    cible_gt:document.getElementById('esc-cible-gt').value,
+    cible_draft:document.getElementById('esc-cible-draft').value,
+    cible_from:document.getElementById('esc-cible-from').value,
+    cible_to:document.getElementById('esc-cible-to').value,
+    cible_eta:document.getElementById('esc-cible-eta').value,
+    cible_cargo:document.getElementById('esc-cible-cargo').value,
+    nav_nom:document.getElementById('esc-nav-nom').value.toUpperCase(),
+    nav_mmsi:document.getElementById('esc-nav-mmsi').value,
+    nav_cs:document.getElementById('esc-nav-cs').value,
+    nav_pavillon:document.getElementById('esc-nav-pavillon').value,
+    nav_type:document.getElementById('esc-nav-type').value,
+    nav_loa:document.getElementById('esc-nav-loa').value,
+    nav_cmd:document.getElementById('esc-nav-cmd').value,
+    nav_vhf:document.getElementById('esc-nav-vhf').value,
+    nav_effectif:document.getElementById('esc-nav-effectif').value,
+    nav_arm:document.getElementById('esc-nav-arm').value,
+    comment:document.getElementById('esc-comment').value,
+    statut:'planifiee',ts:new Date().toISOString()
+  };
+  if(!D.escortes)D.escortes=[];
+  var eid=document.getElementById('esc-edit-id').value;
+  if(eid){
+    var idx=D.escortes.findIndex(function(x){return x.id===eid;});
+    if(idx>=0){e.statut=D.escortes[idx].statut;D.escortes[idx]=e;}
     else D.escortes.push(e);
   } else {
     D.escortes.push(e);
   }
-  pushN('escorte', 'Mission ' + num + ' — ' + (ESC_TY_L[e.type] || e.type), e.cible_nom + ' / ' + e.nav_nom + ' — App. ' + e.heure);
+  pushN('escorte','Mission '+num+' — '+(ESC_TY_L[e.type]||e.type),e.cible_nom+' / '+e.nav_nom+' — App. '+e.heure);
   await sv();
-  document.getElementById('escorte-form').style.display = 'none';
+  document.getElementById('escorte-form').style.display='none';
   renderEscorte();
 }
 
-async function updEscStatut(id, st) {
-  var e = (D.escortes || []).find(function(x) { return x.id === id; });
-  if (e) {
-    e.statut = st;
-    pushN('escorte', 'Mission ' + e.num + ' — ' + (ESC_ST_L[st] || st), e.cible_nom + ' / ' + e.nav_nom);
+async function updEscStatut(id,st){
+  var e=(D.escortes||[]).find(function(x){return x.id===id;});
+  if(e){
+    e.statut=st;
+    pushN('escorte','Mission '+e.num+' — '+(ESC_ST_L[st]||st),e.cible_nom+' / '+e.nav_nom);
     await sv();
     renderEscorte();
   }
 }
 
-async function delEscorte(id) {
-  if (!confirm('Supprimer définitivement cette mission d\'escorte ?')) return;
-  D.escortes = (D.escortes || []).filter(function(e) { return e.id !== id; });
+async function delEsc(id){
+  if(!confirm("Supprimer définitivement cette mission d'escorte ?"))return;
+  D.escortes=(D.escortes||[]).filter(function(e){return e.id!==id;});
   await sv();
   renderEscorte();
 }
 
-function printEscorte(id) {
-  var e = (D.escortes || []).find(function(x) { return x.id === id; });
-  if (!e) return;
-  var html = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>OPLAN ' + e.num + '</title>'
-    + '<style>body{font-family:Arial,sans-serif;font-size:13px;padding:30px;max-width:900px;margin:0 auto}'
-    + 'h1{font-size:17px;border-bottom:3px solid #0d2035;padding-bottom:8px;margin-bottom:16px;color:#0d2035;letter-spacing:.06em}'
-    + 'h2{font-size:12px;font-weight:bold;margin:16px 0 8px;color:#0d2035;border-bottom:1.5px solid #ccc;padding-bottom:4px;text-transform:uppercase;letter-spacing:.06em}'
-    + '.hb{background:#0d2035;color:#fff;padding:14px 18px;border-radius:4px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center}'
-    + '.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}'
-    + '.box{border:1.5px solid #ccc;border-radius:4px;padding:10px}'
-    + '.box-t{font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#0d2035;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #eee}'
-    + '.row{display:flex;padding:4px 0;font-size:12px;border-bottom:1px solid #f5f5f5}'
-    + '.row:last-child{border-bottom:none}'
-    + '.lbl{width:130px;color:#555;flex-shrink:0;font-weight:bold;font-size:11px}'
-    + '.meta{display:flex;gap:20px;font-size:12px;margin-bottom:16px;padding:10px;background:#f0f4f8;border-radius:4px}'
-    + '.sig{margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:40px}'
-    + '.sig-line{border-top:2px solid #000;padding-top:6px;font-size:11px}'
-    + '@media print{.hb{-webkit-print-color-adjust:exact;print-color-adjust:exact}}'
-    + '</style></head><body>'
-    + '<div class="hb"><div><div style="font-size:16px;font-weight:bold;letter-spacing:.06em">PRÉFECTURE MARITIME · JOCC</div>'
-    + '<div style="font-size:11px;margin-top:2px;opacity:.8">République du Bénin · Ordre de mission escorte</div></div>'
-    + '<div style="text-align:right;font-size:11px;opacity:.8">' + new Date().toLocaleDateString('fr-FR',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) + '</div></div>'
-    + '<h1>OPLAN ESCORTE N° ' + e.num + '</h1>'
-    + '<div class="meta">'
-    + '<div>Date : <strong>' + fmt(e.date) + '</strong></div>'
-    + '<div>Appareillage : <strong>' + (e.heure || '—') + '</strong></div>'
-    + '<div>Type : <strong>' + (ESC_TY_L[e.type] || e.type) + '</strong></div>'
-    + '<div>Équipe : <strong>' + (e.equipe || '—') + '</strong></div>'
-    + '<div>Statut : <strong>' + (ESC_ST_L[e.statut] || e.statut) + '</strong></div>'
-    + '</div>'
-    + '<div class="grid2">'
-    + '<div class="box"><div class="box-t">🚢 Navire à escorter</div>'
-    + '<div class="row"><div class="lbl">Nom</div><div><strong>' + (e.cible_nom || '—') + '</strong></div></div>'
-    + '<div class="row"><div class="lbl">MMSI</div><div>' + (e.cible_mmsi || '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">IMO</div><div>' + (e.cible_imo || '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">Indicatif</div><div>' + (e.cible_cs || '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">Pavillon</div><div>' + (e.cible_pavillon || '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">Type</div><div>' + (CIBLE_TY[e.cible_type] || e.cible_type || '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">LOA</div><div>' + (e.cible_loa ? e.cible_loa + ' m' : '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">Jauge (GT)</div><div>' + (e.cible_gt ? Number(e.cible_gt).toLocaleString('fr-FR') : '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">Tirant d'eau</div><div>' + (e.cible_draft ? e.cible_draft + ' m' : '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">Provenance</div><div>' + (e.cible_from || '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">Destination</div><div>' + (e.cible_to || '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">Cargaison</div><div>' + (e.cible_cargo || '—') + '</div></div>'
-    + '</div>'
-    + '<div class="box"><div class="box-t">🛥 Navire escorteur (Marine Nationale)</div>'
-    + '<div class="row"><div class="lbl">Bâtiment</div><div><strong>' + (e.nav_nom || '—') + '</strong></div></div>'
-    + '<div class="row"><div class="lbl">MMSI</div><div>' + (e.nav_mmsi || '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">Indicatif</div><div>' + (e.nav_cs || '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">Pavillon</div><div>' + (e.nav_pavillon || 'Bénin') + '</div></div>'
-    + '<div class="row"><div class="lbl">Type</div><div>' + (NAV_TY[e.nav_type] || e.nav_type || '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">LOA</div><div>' + (e.nav_loa ? e.nav_loa + ' m' : '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">Commandant</div><div><strong>' + (e.nav_cmd || '—') + '</strong></div></div>'
-    + '<div class="row"><div class="lbl">VHF travail</div><div>' + (e.nav_vhf || '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">Effectif</div><div>' + (e.nav_effectif ? e.nav_effectif + ' pers.' : '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">Armement</div><div>' + (e.nav_arm || '—') + '</div></div>'
-    + '</div></div>'
-    + '<h2>Paramètres de mission</h2>'
-    + '<div class="row"><div class="lbl">Zone d'opération</div><div>' + (e.zone || '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">Rendez-vous</div><div>' + (e.rdv || '—') + '</div></div>'
-    + '<div class="row"><div class="lbl">Durée estimée</div><div>' + (e.duree || '—') + '</div></div>'
-    + (e.comment ? '<h2>Observations / Instructions</h2><div style="background:#f8f8f8;border:1px solid #ddd;padding:10px;border-radius:4px;font-size:12px">' + e.comment + '</div>' : '')
-    + '<div class="sig">'
-    + '<div class="sig-line">Signature du Commandant de mission</div>'
-    + '<div class="sig-line">Visa du Chef de quart JOCC</div>'
-    + '</div>'
-    + '<p style="font-size:10px;color:#999;margin-top:20px;border-top:1px solid #eee;padding-top:8px">Généré le ' + new Date().toLocaleString('fr-FR') + ' — Préfecture Maritime · JOCC — République du Bénin</p>'
-    + '</body></html>';
-  var w = window.open('', '_blank', 'width=950,height=750');
-  if (w) { w.document.write(html); w.document.close(); setTimeout(function() { w.print(); }, 600); }
+function printEsc(id){
+  var e=(D.escortes||[]).find(function(x){return x.id===id;});
+  if(!e)return;
+  var doc=window.open('','_blank','width=950,height=750');
+  if(!doc)return;
+  var r=function(l,v){return '<div class="r"><div class="lb">'+l+'</div><div>'+(v||'&mdash;')+'</div></div>';};
+  doc.document.open();
+  doc.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">');
+  doc.document.write('<title>OPLAN '+e.num+'</title>');
+  doc.document.write('<style>');
+  doc.document.write('body{font-family:Arial,sans-serif;font-size:12px;padding:25px;max-width:900px;margin:0 auto}');
+  doc.document.write('h1{font-size:16px;border-bottom:3px solid #0d2035;padding-bottom:7px;margin-bottom:14px;color:#0d2035}');
+  doc.document.write('h2{font-size:11px;font-weight:bold;margin:14px 0 7px;color:#0d2035;border-bottom:1px solid #ccc;padding-bottom:3px;text-transform:uppercase;letter-spacing:.06em}');
+  doc.document.write('.hb{background:#0d2035;color:#fff;padding:12px 16px;border-radius:4px;margin-bottom:16px;display:flex;justify-content:space-between}');
+  doc.document.write('.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}');
+  doc.document.write('.box{border:1.5px solid #ccc;border-radius:4px;padding:10px}');
+  doc.document.write('.bt{font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#0d2035;margin-bottom:7px;padding-bottom:3px;border-bottom:1px solid #eee}');
+  doc.document.write('.r{display:flex;padding:3px 0;border-bottom:1px solid #f5f5f5;font-size:11px}.r:last-child{border-bottom:none}');
+  doc.document.write('.lb{width:120px;color:#555;flex-shrink:0;font-weight:bold}');
+  doc.document.write('.meta{display:flex;gap:16px;font-size:11px;margin-bottom:14px;padding:8px;background:#f0f4f8;border-radius:4px}');
+  doc.document.write('.sig{margin-top:36px;display:grid;grid-template-columns:1fr 1fr;gap:40px}');
+  doc.document.write('.sl{border-top:2px solid #000;padding-top:5px;font-size:10px}');
+  doc.document.write('@media print{.hb{-webkit-print-color-adjust:exact;print-color-adjust:exact}}');
+  doc.document.write('</style></head><body>');
+  doc.document.write('<div class="hb"><div>');
+  doc.document.write('<div style="font-size:15px;font-weight:bold;letter-spacing:.05em">PRÉFECTURE MARITIME &middot; JOCC</div>');
+  doc.document.write('<div style="font-size:10px;margin-top:2px;opacity:.8">République du Bénin &middot; Ordre de mission escorte</div>');
+  doc.document.write('</div><div style="font-size:10px;opacity:.8">'+new Date().toLocaleDateString('fr-FR',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'</div></div>');
+  doc.document.write('<h1>OPLAN ESCORTE N° '+e.num+'</h1>');
+  doc.document.write('<div class="meta">');
+  doc.document.write('<div>Date : <strong>'+fmt(e.date)+'</strong></div>');
+  doc.document.write('<div>Appareillage : <strong>'+(e.heure||'&mdash;')+'</strong></div>');
+  doc.document.write('<div>Type : <strong>'+(ESC_TY_L[e.type]||e.type)+'</strong></div>');
+  doc.document.write('<div>Équipe : <strong>'+(e.equipe||'&mdash;')+'</strong></div>');
+  doc.document.write('<div>Statut : <strong>'+(ESC_ST_L[e.statut]||e.statut)+'</strong></div>');
+  doc.document.write('</div>');
+  doc.document.write('<div class="g2">');
+  doc.document.write('<div class="box"><div class="bt">Navire à escorter</div>');
+  doc.document.write(r('Nom','<strong>'+(e.cible_nom||'&mdash;')+'</strong>'));
+  doc.document.write(r('MMSI',e.cible_mmsi)+r('IMO',e.cible_imo)+r('Indicatif',e.cible_cs));
+  doc.document.write(r('Pavillon',e.cible_pavillon)+r('Type',CIBLE_TY[e.cible_type]||'&mdash;'));
+  doc.document.write(r('LOA',e.cible_loa?e.cible_loa+' m':''));
+  doc.document.write(r('GT',e.cible_gt?Number(e.cible_gt).toLocaleString('fr-FR'):''));
+  doc.document.write(r('Tirant',e.cible_draft?e.cible_draft+' m':''));
+  doc.document.write(r('De',e.cible_from)+r('Vers',e.cible_to)+r('Cargaison',e.cible_cargo));
+  doc.document.write('</div>');
+  doc.document.write('<div class="box"><div class="bt">Escorteur (Marine Nationale)</div>');
+  doc.document.write(r('Bâtiment','<strong>'+(e.nav_nom||'&mdash;')+'</strong>'));
+  doc.document.write(r('MMSI',e.nav_mmsi)+r('Indicatif',e.nav_cs));
+  doc.document.write(r('Pavillon',e.nav_pavillon||'Bénin')+r('Type',NAV_TY[e.nav_type]||'&mdash;'));
+  doc.document.write(r('LOA',e.nav_loa?e.nav_loa+' m':''));
+  doc.document.write(r('Commandant','<strong>'+(e.nav_cmd||'&mdash;')+'</strong>'));
+  doc.document.write(r('VHF travail',e.nav_vhf)+r('Effectif',e.nav_effectif?e.nav_effectif+' pers.':''));
+  doc.document.write(r('Armement',e.nav_arm));
+  doc.document.write('</div></div>');
+  doc.document.write('<h2>Paramètres de mission</h2>');
+  doc.document.write(r('Zone',e.zone)+r('Rendez-vous',e.rdv)+r('Durée estimée',e.duree));
+  if(e.comment){
+    doc.document.write('<h2>Observations / Instructions</h2>');
+    doc.document.write('<div style="background:#f8f8f8;border:1px solid #ddd;padding:9px;border-radius:4px">'+e.comment+'</div>');
+  }
+  doc.document.write('<div class="sig"><div class="sl">Signature du Commandant de mission</div><div class="sl">Visa du Chef de quart JOCC</div></div>');
+  doc.document.write('<p style="font-size:9px;color:#999;margin-top:18px;border-top:1px solid #eee;padding-top:7px">');
+  doc.document.write('Généré le '+new Date().toLocaleString('fr-FR')+' &mdash; Préfecture Maritime &middot; JOCC &mdash; République du Bénin</p>');
+  doc.document.close();
+  setTimeout(function(){doc.print();},600);
 }
 
-document.getElementById('btn-new-escorte').addEventListener('click', function() { openEscorteForm(true); });
-document.getElementById('escorte-cancel').addEventListener('click', function() { document.getElementById('escorte-form').style.display = 'none'; });
-document.getElementById('esc-cancel2').addEventListener('click', function() { document.getElementById('escorte-form').style.display = 'none'; });
-document.getElementById('esc-save').addEventListener('click', saveEscorte);
-document.getElementById('esc-flt-st').addEventListener('change', renderEscorte);
-document.getElementById('esc-flt-ty').addEventListener('change', renderEscorte);
-document.getElementById('esc-flt-dt').addEventListener('change', renderEscorte);
+document.getElementById('btn-new-escorte').addEventListener('click',function(){openEscForm(true);});
+document.getElementById('escorte-cancel').addEventListener('click',function(){document.getElementById('escorte-form').style.display='none';});
+document.getElementById('esc-cancel2').addEventListener('click',function(){document.getElementById('escorte-form').style.display='none';});
+document.getElementById('esc-save').addEventListener('click',saveEsc);
+document.getElementById('esc-flt-st').addEventListener('change',renderEscorte);
+document.getElementById('esc-flt-ty').addEventListener('change',renderEscorte);
+document.getElementById('esc-flt-dt').addEventListener('change',renderEscorte);
 
+load().then(()=>showTab('dashboard'));
 </script>
 
-<!-- ═══ ESCORTE ═══ -->
+<!-- ═══ ESCORTE TAB ═══ -->
 <div id="tab-escorte" class="tab" style="display:none">
   <div class="card-dk mb12">
     <div class="flex-b">
       <div>
         <div style="font-size:15px;font-weight:700;letter-spacing:.06em;color:rgba(200,164,74,.9)">⚓ MISSIONS D'ESCORTE</div>
-        <div style="font-size:10px;color:rgba(111,163,200,.7);margin-top:2px">Marine Nationale · Appareillage · Escortes entrante et sortante</div>
+        <div style="font-size:10px;color:rgba(111,163,200,.7);margin-top:2px">Marine Nationale · Appareillage · Escorte entrante / sortante</div>
       </div>
       <button class="btn btn-gold" id="btn-new-escorte">+ Nouvelle mission</button>
     </div>
   </div>
-
   <div id="escorte-form" style="display:none" class="card-section mb12">
     <div class="card-section-header">
       <div style="font-size:13px;font-weight:700" id="escorte-form-title">Nouvelle mission d'escorte</div>
@@ -1446,22 +1030,21 @@ document.getElementById('esc-flt-dt').addEventListener('change', renderEscorte);
             <option value="aller-retour">Aller-retour</option>
           </select>
         </div>
-        <div class="fg"><label>Zone d'opération</label><input type="text" id="esc-zone" placeholder="Ex: Golfe de Bénin, zone 12nm"></div>
+        <div class="fg"><label>Zone d'opération</label><input type="text" id="esc-zone" placeholder="Golfe de Bénin..."></div>
         <div class="fg"><label>Point de rendez-vous</label><input type="text" id="esc-rdv" placeholder="Lat/Lon ou repère"></div>
         <div class="fg"><label>Durée estimée</label><input type="text" id="esc-duree" placeholder="Ex: 4h, 12h"></div>
         <div class="fg"><label>Équipe de quart</label>
           <select id="esc-equipe"><option>A</option><option>B</option><option>C</option><option>D</option></select>
         </div>
       </div>
-
       <div class="section-lbl">🚢 Navire à escorter</div>
       <div style="background:rgba(74,127,165,.07);border:1.5px solid rgba(74,127,165,.25);border-radius:10px;padding:12px;margin-bottom:12px">
         <div class="g3 mb8">
-          <div class="fg"><label>Nom du navire</label><input type="text" id="esc-cible-nom" placeholder="Ex: MV ATLANTIC STAR"></div>
-          <div class="fg"><label>MMSI</label><input type="text" id="esc-cible-mmsi" placeholder="Ex: 636012345"></div>
-          <div class="fg"><label>Numéro IMO</label><input type="text" id="esc-cible-imo" placeholder="Ex: IMO9876543"></div>
-          <div class="fg"><label>Indicatif d'appel</label><input type="text" id="esc-cible-cs" placeholder="Ex: VNAA"></div>
-          <div class="fg"><label>Pavillon</label><input type="text" id="esc-cible-pavillon" placeholder="Ex: Panama, France"></div>
+          <div class="fg"><label>Nom du navire</label><input type="text" id="esc-cible-nom" placeholder="MV ATLANTIC STAR"></div>
+          <div class="fg"><label>MMSI</label><input type="text" id="esc-cible-mmsi" placeholder="636012345"></div>
+          <div class="fg"><label>Numéro IMO</label><input type="text" id="esc-cible-imo" placeholder="IMO9876543"></div>
+          <div class="fg"><label>Indicatif d'appel</label><input type="text" id="esc-cible-cs" placeholder="VNAA"></div>
+          <div class="fg"><label>Pavillon</label><input type="text" id="esc-cible-pavillon" placeholder="Panama, France..."></div>
           <div class="fg"><label>Type de navire</label>
             <select id="esc-cible-type">
               <option value="cargo">Cargo</option>
@@ -1480,19 +1063,18 @@ document.getElementById('esc-flt-dt').addEventListener('change', renderEscorte);
           <div class="fg"><label>Longueur LOA (m)</label><input type="number" id="esc-cible-loa" placeholder="185"></div>
           <div class="fg"><label>Jauge brute (GT)</label><input type="number" id="esc-cible-gt" placeholder="25000"></div>
           <div class="fg"><label>Tirant d'eau (m)</label><input type="text" id="esc-cible-draft" placeholder="8.5"></div>
-          <div class="fg"><label>Port de provenance</label><input type="text" id="esc-cible-from" placeholder="Ex: Lomé, Lagos"></div>
-          <div class="fg"><label>Port de destination</label><input type="text" id="esc-cible-to" placeholder="Ex: Cotonou, Dakar"></div>
+          <div class="fg"><label>Port de provenance</label><input type="text" id="esc-cible-from" placeholder="Lomé, Lagos..."></div>
+          <div class="fg"><label>Port de destination</label><input type="text" id="esc-cible-to" placeholder="Cotonou, Dakar..."></div>
           <div class="fg"><label>ETA / ETD</label><input type="datetime-local" id="esc-cible-eta"></div>
         </div>
-        <div class="fg" style="margin-bottom:0"><label>Cargaison / Marchandise</label><input type="text" id="esc-cible-cargo" placeholder="Ex: Produits pétroliers, Conteneurs, Vrac..."></div>
+        <div class="fg" style="margin-bottom:0"><label>Cargaison / Marchandise</label><input type="text" id="esc-cible-cargo" placeholder="Produits pétroliers, Conteneurs..."></div>
       </div>
-
       <div class="section-lbl">🛥 Navire escorteur (Marine Nationale)</div>
       <div style="background:rgba(200,164,74,.06);border:1.5px solid rgba(200,164,74,.28);border-radius:10px;padding:12px;margin-bottom:12px">
         <div class="g3 mb8">
-          <div class="fg"><label>Nom du bâtiment</label><input type="text" id="esc-nav-nom" placeholder="Ex: PR SOGLO, PR BENIN"></div>
-          <div class="fg"><label>MMSI</label><input type="text" id="esc-nav-mmsi" placeholder="Ex: 605000001"></div>
-          <div class="fg"><label>Indicatif d'appel</label><input type="text" id="esc-nav-cs" placeholder="Ex: TXAA"></div>
+          <div class="fg"><label>Nom du bâtiment</label><input type="text" id="esc-nav-nom" placeholder="PR SOGLO, PR BENIN..."></div>
+          <div class="fg"><label>MMSI</label><input type="text" id="esc-nav-mmsi" placeholder="605000001"></div>
+          <div class="fg"><label>Indicatif d'appel</label><input type="text" id="esc-nav-cs" placeholder="TXAA"></div>
           <div class="fg"><label>Pavillon</label><input type="text" id="esc-nav-pavillon" placeholder="Bénin"></div>
           <div class="fg"><label>Type de bâtiment</label>
             <select id="esc-nav-type">
@@ -1510,11 +1092,10 @@ document.getElementById('esc-flt-dt').addEventListener('change', renderEscorte);
           <div class="fg"><label>Canal VHF de travail</label><input type="text" id="esc-nav-vhf" placeholder="VHF 16 / CH 12"></div>
           <div class="fg"><label>Effectif embarqué</label><input type="number" id="esc-nav-effectif" placeholder="12"></div>
         </div>
-        <div class="fg" style="margin-bottom:0"><label>Armement / Équipements notables</label><input type="text" id="esc-nav-arm" placeholder="Ex: Mitrailleuses 12.7mm, radar ARPA, AIS classe A..."></div>
+        <div class="fg" style="margin-bottom:0"><label>Armement / Équipements</label><input type="text" id="esc-nav-arm" placeholder="Mitrailleuses 12.7mm, radar ARPA..."></div>
       </div>
-
       <div class="fg"><label>Observations / Instructions particulières</label>
-        <textarea id="esc-comment" rows="3" placeholder="Ex: Menace piraterie signalée, coordination autorités portuaires, règles d'engagement..."></textarea>
+        <textarea id="esc-comment" rows="3" placeholder="Menace piraterie, coordination autorités portuaires, règles d'engagement..."></textarea>
       </div>
       <input type="hidden" id="esc-edit-id">
       <div class="flex">
@@ -1523,7 +1104,6 @@ document.getElementById('esc-flt-dt').addEventListener('change', renderEscorte);
       </div>
     </div>
   </div>
-
   <div class="g4 mb10">
     <div class="stat"><div class="stat-l">Total missions</div><div class="stat-v" id="esg-total">0</div></div>
     <div class="stat"><div class="stat-l">En cours</div><div class="stat-v" id="esg-encours" style="color:#27ae60">0</div></div>
