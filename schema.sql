@@ -58,7 +58,8 @@ INSERT INTO operateurs (id,nom,prenom,grade,equipe,poste,actif) VALUES
   ('op_d2','ROUX',      'Catherine','OIM', 'D','radio',       true),
   ('op_d3','FOURNIER',  'Alain',    'CC',  'D','veille',      true),
   ('op_d4','VINCENT',   'Sandra',   'EV1', 'D','permanence',  true),
-  ('op_s1','HOUNKPE',   'Romuald',  'CF',  'A','supervision', true)
+  ('op_s1','HOUNKPE',   'Romuald',  'CF',  'A','supervision', true),
+  ('admin_01','ADMIN',  'Super',    'CDT', 'A','supervision', true)
 ON CONFLICT ON CONSTRAINT unique_oper_name DO NOTHING;
 
 -- ─── SITREPS ────────────────────────────────────────────────────
