@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
@@ -467,6 +467,137 @@ tr:last-child td{border-bottom:none}
 
 </div>
 
+<!-- ═══ ESCORTE TAB ═══ -->
+<div id="tab-escorte" class="tab" style="display:none">
+  <div class="card-dk mb12">
+    <div class="flex-b">
+      <div>
+        <div style="font-size:15px;font-weight:700;letter-spacing:.06em;color:rgba(200,164,74,.9)">⚓ MISSIONS D'ESCORTE</div>
+        <div style="font-size:10px;color:rgba(111,163,200,.7);margin-top:2px">Marine Nationale · Appareillage · Escorte entrante / sortante</div>
+      </div>
+      <button class="btn btn-gold" id="btn-new-escorte">+ Nouvelle mission</button>
+    </div>
+  </div>
+  <div id="escorte-form" style="display:none" class="card-section mb12">
+    <div class="card-section-header">
+      <div style="font-size:13px;font-weight:700" id="escorte-form-title">Nouvelle mission d'escorte</div>
+      <button class="btn" id="escorte-cancel">✕ Annuler</button>
+    </div>
+    <div class="card-section-body">
+      <div class="section-lbl">📋 Identification de la mission</div>
+      <div class="g4 mb10">
+        <div class="fg"><label>N° Mission</label><input type="text" id="esc-num" placeholder="ESC-001"></div>
+        <div class="fg"><label>Date</label><input type="date" id="esc-date"></div>
+        <div class="fg"><label>Heure d'appareillage</label><input type="time" id="esc-heure"></div>
+        <div class="fg"><label>Type de mission</label>
+          <select id="esc-type">
+            <option value="entree">Escorte à l'entrée</option>
+            <option value="sortie">Escorte à la sortie</option>
+            <option value="aller-retour">Aller-retour</option>
+          </select>
+        </div>
+        <div class="fg"><label>Zone d'opération</label><input type="text" id="esc-zone" placeholder="Golfe de Bénin..."></div>
+        <div class="fg"><label>Point de rendez-vous</label><input type="text" id="esc-rdv" placeholder="Lat/Lon ou repère"></div>
+        <div class="fg"><label>Durée estimée</label><input type="text" id="esc-duree" placeholder="Ex: 4h, 12h"></div>
+        <div class="fg"><label>Équipe de quart</label>
+          <select id="esc-equipe"><option>A</option><option>B</option><option>C</option><option>D</option></select>
+        </div>
+      </div>
+      <div class="section-lbl">🚢 Navire à escorter</div>
+      <div style="background:rgba(74,127,165,.07);border:1.5px solid rgba(74,127,165,.25);border-radius:10px;padding:12px;margin-bottom:12px">
+        <div class="g3 mb8">
+          <div class="fg"><label>Nom du navire</label><input type="text" id="esc-cible-nom" placeholder="MV ATLANTIC STAR"></div>
+          <div class="fg"><label>MMSI</label><input type="text" id="esc-cible-mmsi" placeholder="636012345"></div>
+          <div class="fg"><label>Numéro IMO</label><input type="text" id="esc-cible-imo" placeholder="IMO9876543"></div>
+          <div class="fg"><label>Indicatif d'appel</label><input type="text" id="esc-cible-cs" placeholder="VNAA"></div>
+          <div class="fg"><label>Pavillon</label><input type="text" id="esc-cible-pavillon" placeholder="Panama, France..."></div>
+          <div class="fg"><label>Type de navire</label>
+            <select id="esc-cible-type">
+              <option value="cargo">Cargo</option>
+              <option value="petrolier">Pétrolier / Tanker</option>
+              <option value="vraquier">Vraquier</option>
+              <option value="conteneur">Porte-conteneurs</option>
+              <option value="passagers">Passagers</option>
+              <option value="roro">Ro-Ro</option>
+              <option value="gazier">Gazier</option>
+              <option value="chimquier">Chimiquier</option>
+              <option value="peche">Navire de pêche</option>
+              <option value="remorqueur">Remorqueur</option>
+              <option value="autre">Autre</option>
+            </select>
+          </div>
+          <div class="fg"><label>Longueur LOA (m)</label><input type="number" id="esc-cible-loa" placeholder="185"></div>
+          <div class="fg"><label>Jauge brute (GT)</label><input type="number" id="esc-cible-gt" placeholder="25000"></div>
+          <div class="fg"><label>Tirant d'eau (m)</label><input type="text" id="esc-cible-draft" placeholder="8.5"></div>
+          <div class="fg"><label>Port de provenance</label><input type="text" id="esc-cible-from" placeholder="Lomé, Lagos..."></div>
+          <div class="fg"><label>Port de destination</label><input type="text" id="esc-cible-to" placeholder="Cotonou, Dakar..."></div>
+          <div class="fg"><label>ETA / ETD</label><input type="datetime-local" id="esc-cible-eta"></div>
+        </div>
+        <div class="fg" style="margin-bottom:0"><label>Cargaison / Marchandise</label><input type="text" id="esc-cible-cargo" placeholder="Produits pétroliers, Conteneurs..."></div>
+      </div>
+      <div class="section-lbl">🛥 Navire escorteur (Marine Nationale)</div>
+      <div style="background:rgba(200,164,74,.06);border:1.5px solid rgba(200,164,74,.28);border-radius:10px;padding:12px;margin-bottom:12px">
+        <div class="g3 mb8">
+          <div class="fg"><label>Nom du bâtiment</label><input type="text" id="esc-nav-nom" placeholder="PR SOGLO, PR BENIN..."></div>
+          <div class="fg"><label>MMSI</label><input type="text" id="esc-nav-mmsi" placeholder="605000001"></div>
+          <div class="fg"><label>Indicatif d'appel</label><input type="text" id="esc-nav-cs" placeholder="TXAA"></div>
+          <div class="fg"><label>Pavillon</label><input type="text" id="esc-nav-pavillon" placeholder="Bénin"></div>
+          <div class="fg"><label>Type de bâtiment</label>
+            <select id="esc-nav-type">
+              <option value="patrouilleur">Patrouilleur</option>
+              <option value="vedette">Vedette rapide</option>
+              <option value="aviso">Aviso</option>
+              <option value="fregatte">Frégate</option>
+              <option value="corvette">Corvette</option>
+              <option value="bac">Bt. de commandement</option>
+              <option value="autre">Autre</option>
+            </select>
+          </div>
+          <div class="fg"><label>Longueur LOA (m)</label><input type="number" id="esc-nav-loa" placeholder="45"></div>
+          <div class="fg"><label>Commandant</label><input type="text" id="esc-nav-cmd" placeholder="Grade NOM Prénom"></div>
+          <div class="fg"><label>Canal VHF de travail</label><input type="text" id="esc-nav-vhf" placeholder="VHF 16 / CH 12"></div>
+          <div class="fg"><label>Effectif embarqué</label><input type="number" id="esc-nav-effectif" placeholder="12"></div>
+        </div>
+        <div class="fg" style="margin-bottom:0"><label>Armement / Équipements</label><input type="text" id="esc-nav-arm" placeholder="Mitrailleuses 12.7mm, radar ARPA..."></div>
+      </div>
+      <div class="fg"><label>Observations / Instructions particulières</label>
+        <textarea id="esc-comment" rows="3" placeholder="Menace piraterie, coordination autorités portuaires, règles d'engagement..."></textarea>
+      </div>
+      <input type="hidden" id="esc-edit-id">
+      <div class="flex">
+        <button class="btn btn-gold" id="esc-save">✔ Enregistrer la mission</button>
+        <button class="btn" id="esc-cancel2">✕ Annuler</button>
+      </div>
+    </div>
+  </div>
+  <div class="g4 mb10">
+    <div class="stat"><div class="stat-l">Total missions</div><div class="stat-v" id="esg-total">0</div></div>
+    <div class="stat"><div class="stat-l">En cours</div><div class="stat-v" id="esg-encours" style="color:#27ae60">0</div></div>
+    <div class="stat"><div class="stat-l">Planifiées</div><div class="stat-v" id="esg-plan" style="color:rgba(200,164,74,.9)">0</div></div>
+    <div class="stat"><div class="stat-l">Terminées</div><div class="stat-v" id="esg-done">0</div></div>
+  </div>
+  <div class="flex-b mb10">
+    <div style="font-size:12px;font-weight:700;letter-spacing:.05em" id="esc-count-lbl"></div>
+    <div class="flex">
+      <select id="esc-flt-st" style="width:auto;font-size:12px">
+        <option value="">Tous statuts</option>
+        <option value="planifiee">Planifiée</option>
+        <option value="encours">En cours</option>
+        <option value="terminee">Terminée</option>
+        <option value="annulee">Annulée</option>
+      </select>
+      <select id="esc-flt-ty" style="width:auto;font-size:12px">
+        <option value="">Tous types</option>
+        <option value="entree">Entrée</option>
+        <option value="sortie">Sortie</option>
+        <option value="aller-retour">Aller-retour</option>
+      </select>
+      <input type="date" id="esc-flt-dt" style="width:auto;font-size:12px">
+    </div>
+  </div>
+  <div id="escorte-list"></div>
+</div>
+
 <script>
 const TEAMS=['A','B','C','D'];
 const POSTES={chef:'Chef de quart',veille:'Op. de veille',radio:'Op. radio',permanence:'Off. permanence',supervision:'Superviseur'};
@@ -498,7 +629,7 @@ async function load(){
   if(!D.absences)D.absences=[];
   await sv();
 }
-async function sv(){try{localStorage.setItem('jocc_v5',JSON.stringify(D)));}catch(e){}}
+async function sv(){try{localStorage.setItem('jocc_v5',JSON.stringify(D));}catch(e){}}
 
 function initSample(){
   const defs=[['MARTIN','Jean','LV','A','chef'],['DUBOIS','Marie','OIM','A','radio'],['BERNARD','Paul','CC','A','veille'],['THOMAS','Sophie','EV1','A','permanence'],['PETIT','Luc','LV','B','chef'],['ROBERT','Anna','OIM','B','radio'],['RICHARD','Marc','CC','B','veille'],['SIMON','Julie','EV1','B','permanence'],['MOREAU','Eric','LV','C','chef'],['LAURENT','Claire','OIM','C','radio'],['GARCIA','Pierre','CC','C','veille'],['LEROY','Isabelle','EV1','C','permanence'],['ADAM','Nicolas','LV','D','chef'],['ROUX','Catherine','OIM','D','radio'],['FOURNIER','Alain','CC','D','veille'],['VINCENT','Sandra','EV1','D','permanence'],['HOUNKPE','Romuald','CF','A','supervision']];
@@ -1000,137 +1131,6 @@ document.getElementById('esc-flt-dt').addEventListener('change',renderEscorte);
 
 load().then(()=>showTab('dashboard'));
 </script>
-
-<!-- ═══ ESCORTE TAB ═══ -->
-<div id="tab-escorte" class="tab" style="display:none">
-  <div class="card-dk mb12">
-    <div class="flex-b">
-      <div>
-        <div style="font-size:15px;font-weight:700;letter-spacing:.06em;color:rgba(200,164,74,.9)">⚓ MISSIONS D'ESCORTE</div>
-        <div style="font-size:10px;color:rgba(111,163,200,.7);margin-top:2px">Marine Nationale · Appareillage · Escorte entrante / sortante</div>
-      </div>
-      <button class="btn btn-gold" id="btn-new-escorte">+ Nouvelle mission</button>
-    </div>
-  </div>
-  <div id="escorte-form" style="display:none" class="card-section mb12">
-    <div class="card-section-header">
-      <div style="font-size:13px;font-weight:700" id="escorte-form-title">Nouvelle mission d'escorte</div>
-      <button class="btn" id="escorte-cancel">✕ Annuler</button>
-    </div>
-    <div class="card-section-body">
-      <div class="section-lbl">📋 Identification de la mission</div>
-      <div class="g4 mb10">
-        <div class="fg"><label>N° Mission</label><input type="text" id="esc-num" placeholder="ESC-001"></div>
-        <div class="fg"><label>Date</label><input type="date" id="esc-date"></div>
-        <div class="fg"><label>Heure d'appareillage</label><input type="time" id="esc-heure"></div>
-        <div class="fg"><label>Type de mission</label>
-          <select id="esc-type">
-            <option value="entree">Escorte à l'entrée</option>
-            <option value="sortie">Escorte à la sortie</option>
-            <option value="aller-retour">Aller-retour</option>
-          </select>
-        </div>
-        <div class="fg"><label>Zone d'opération</label><input type="text" id="esc-zone" placeholder="Golfe de Bénin..."></div>
-        <div class="fg"><label>Point de rendez-vous</label><input type="text" id="esc-rdv" placeholder="Lat/Lon ou repère"></div>
-        <div class="fg"><label>Durée estimée</label><input type="text" id="esc-duree" placeholder="Ex: 4h, 12h"></div>
-        <div class="fg"><label>Équipe de quart</label>
-          <select id="esc-equipe"><option>A</option><option>B</option><option>C</option><option>D</option></select>
-        </div>
-      </div>
-      <div class="section-lbl">🚢 Navire à escorter</div>
-      <div style="background:rgba(74,127,165,.07);border:1.5px solid rgba(74,127,165,.25);border-radius:10px;padding:12px;margin-bottom:12px">
-        <div class="g3 mb8">
-          <div class="fg"><label>Nom du navire</label><input type="text" id="esc-cible-nom" placeholder="MV ATLANTIC STAR"></div>
-          <div class="fg"><label>MMSI</label><input type="text" id="esc-cible-mmsi" placeholder="636012345"></div>
-          <div class="fg"><label>Numéro IMO</label><input type="text" id="esc-cible-imo" placeholder="IMO9876543"></div>
-          <div class="fg"><label>Indicatif d'appel</label><input type="text" id="esc-cible-cs" placeholder="VNAA"></div>
-          <div class="fg"><label>Pavillon</label><input type="text" id="esc-cible-pavillon" placeholder="Panama, France..."></div>
-          <div class="fg"><label>Type de navire</label>
-            <select id="esc-cible-type">
-              <option value="cargo">Cargo</option>
-              <option value="petrolier">Pétrolier / Tanker</option>
-              <option value="vraquier">Vraquier</option>
-              <option value="conteneur">Porte-conteneurs</option>
-              <option value="passagers">Passagers</option>
-              <option value="roro">Ro-Ro</option>
-              <option value="gazier">Gazier</option>
-              <option value="chimquier">Chimiquier</option>
-              <option value="peche">Navire de pêche</option>
-              <option value="remorqueur">Remorqueur</option>
-              <option value="autre">Autre</option>
-            </select>
-          </div>
-          <div class="fg"><label>Longueur LOA (m)</label><input type="number" id="esc-cible-loa" placeholder="185"></div>
-          <div class="fg"><label>Jauge brute (GT)</label><input type="number" id="esc-cible-gt" placeholder="25000"></div>
-          <div class="fg"><label>Tirant d'eau (m)</label><input type="text" id="esc-cible-draft" placeholder="8.5"></div>
-          <div class="fg"><label>Port de provenance</label><input type="text" id="esc-cible-from" placeholder="Lomé, Lagos..."></div>
-          <div class="fg"><label>Port de destination</label><input type="text" id="esc-cible-to" placeholder="Cotonou, Dakar..."></div>
-          <div class="fg"><label>ETA / ETD</label><input type="datetime-local" id="esc-cible-eta"></div>
-        </div>
-        <div class="fg" style="margin-bottom:0"><label>Cargaison / Marchandise</label><input type="text" id="esc-cible-cargo" placeholder="Produits pétroliers, Conteneurs..."></div>
-      </div>
-      <div class="section-lbl">🛥 Navire escorteur (Marine Nationale)</div>
-      <div style="background:rgba(200,164,74,.06);border:1.5px solid rgba(200,164,74,.28);border-radius:10px;padding:12px;margin-bottom:12px">
-        <div class="g3 mb8">
-          <div class="fg"><label>Nom du bâtiment</label><input type="text" id="esc-nav-nom" placeholder="PR SOGLO, PR BENIN..."></div>
-          <div class="fg"><label>MMSI</label><input type="text" id="esc-nav-mmsi" placeholder="605000001"></div>
-          <div class="fg"><label>Indicatif d'appel</label><input type="text" id="esc-nav-cs" placeholder="TXAA"></div>
-          <div class="fg"><label>Pavillon</label><input type="text" id="esc-nav-pavillon" placeholder="Bénin"></div>
-          <div class="fg"><label>Type de bâtiment</label>
-            <select id="esc-nav-type">
-              <option value="patrouilleur">Patrouilleur</option>
-              <option value="vedette">Vedette rapide</option>
-              <option value="aviso">Aviso</option>
-              <option value="fregatte">Frégate</option>
-              <option value="corvette">Corvette</option>
-              <option value="bac">Bt. de commandement</option>
-              <option value="autre">Autre</option>
-            </select>
-          </div>
-          <div class="fg"><label>Longueur LOA (m)</label><input type="number" id="esc-nav-loa" placeholder="45"></div>
-          <div class="fg"><label>Commandant</label><input type="text" id="esc-nav-cmd" placeholder="Grade NOM Prénom"></div>
-          <div class="fg"><label>Canal VHF de travail</label><input type="text" id="esc-nav-vhf" placeholder="VHF 16 / CH 12"></div>
-          <div class="fg"><label>Effectif embarqué</label><input type="number" id="esc-nav-effectif" placeholder="12"></div>
-        </div>
-        <div class="fg" style="margin-bottom:0"><label>Armement / Équipements</label><input type="text" id="esc-nav-arm" placeholder="Mitrailleuses 12.7mm, radar ARPA..."></div>
-      </div>
-      <div class="fg"><label>Observations / Instructions particulières</label>
-        <textarea id="esc-comment" rows="3" placeholder="Menace piraterie, coordination autorités portuaires, règles d'engagement..."></textarea>
-      </div>
-      <input type="hidden" id="esc-edit-id">
-      <div class="flex">
-        <button class="btn btn-gold" id="esc-save">✔ Enregistrer la mission</button>
-        <button class="btn" id="esc-cancel2">✕ Annuler</button>
-      </div>
-    </div>
-  </div>
-  <div class="g4 mb10">
-    <div class="stat"><div class="stat-l">Total missions</div><div class="stat-v" id="esg-total">0</div></div>
-    <div class="stat"><div class="stat-l">En cours</div><div class="stat-v" id="esg-encours" style="color:#27ae60">0</div></div>
-    <div class="stat"><div class="stat-l">Planifiées</div><div class="stat-v" id="esg-plan" style="color:rgba(200,164,74,.9)">0</div></div>
-    <div class="stat"><div class="stat-l">Terminées</div><div class="stat-v" id="esg-done">0</div></div>
-  </div>
-  <div class="flex-b mb10">
-    <div style="font-size:12px;font-weight:700;letter-spacing:.05em" id="esc-count-lbl"></div>
-    <div class="flex">
-      <select id="esc-flt-st" style="width:auto;font-size:12px">
-        <option value="">Tous statuts</option>
-        <option value="planifiee">Planifiée</option>
-        <option value="encours">En cours</option>
-        <option value="terminee">Terminée</option>
-        <option value="annulee">Annulée</option>
-      </select>
-      <select id="esc-flt-ty" style="width:auto;font-size:12px">
-        <option value="">Tous types</option>
-        <option value="entree">Entrée</option>
-        <option value="sortie">Sortie</option>
-        <option value="aller-retour">Aller-retour</option>
-      </select>
-      <input type="date" id="esc-flt-dt" style="width:auto;font-size:12px">
-    </div>
-  </div>
-  <div id="escorte-list"></div>
-</div>
 
 </body>
 </html>
