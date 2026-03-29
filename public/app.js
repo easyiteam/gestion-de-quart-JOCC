@@ -32,12 +32,16 @@ function tOps(eq) { return D.operators.filter(o => o.equipe === eq && o.actif); 
 function dBetween(a, b) { return Math.max(1, Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 86400000) + 1); }
 function sups() { return D.operators.filter(o => o.poste === 'supervision' && o.actif); }
 
+window.currentUser = null;
+
 // ── API HELPERS ────────────────────────────────────────────────────────
 async function api(path, options = {}) {
-    const res = await fetch('/api' + path, {
-        ...options,
-        headers: { 'Content-Type': 'application/json', ...options.headers }
-    });
+    const headers = { 'Content-Type': 'application/json', ...options.headers };
+    if(window.currentUser) {
+        headers['x-jocc-user'] = window.currentUser.id;
+        headers['x-jocc-role'] = window.currentUser.poste;
+    }
+    const res = await fetch('/api' + path, { ...options, headers });
     const json = await res.json();
     if (!json.success) throw new Error(json.error || 'Erreur API');
     return json.data;
@@ -110,6 +114,7 @@ function renderDash() {
     document.getElementById('s-ops').textContent = ops.length;
     document.getElementById('hs-ops').textContent = ops.length;
     document.getElementById('s-abs').textContent = aN;
+    if(document.getElementById('s-esc')) document.getElementById('s-esc').textContent = D.escortes.filter(e=>e.statut==='encours').length;
     document.getElementById('s-next2').innerHTML = tBadge(nEq);
     document.getElementById('hs-sit').textContent = D.sitreps.length;
     document.getElementById('hs-next').innerHTML = tBadge(nEq);
@@ -342,12 +347,12 @@ window.addEv = async () => {
 
 window.delEv = async (id) => {
     if(!confirm('Effacer cet événement ?')) return;
-    try { await api(`/rapports/evenements/${id}`, { method: 'DELETE' }); loadRpt(); } catch(e) {}
+    try { await api(`/rapports/${curRptDate}/evenements/${id}`, { method: 'DELETE' }); loadRpt(); } catch(e) {}
 };
 
 window.saveRptMeta = async () => {
     const data = { chef: document.getElementById('rpt-chef').value, observations: document.getElementById('rpt-obs').value };
-    try { await api(`/rapports/${curRptDate}/meta`, { method: 'POST', body: JSON.stringify(data) }); alert('Enregistré'); } catch(e) {}
+    try { await api(`/rapports/${curRptDate}`, { method: 'PUT', body: JSON.stringify(data) }); alert('Enregistré'); } catch(e) {}
 };
 
 window.printRpt = async () => {
@@ -422,6 +427,7 @@ function renderSup() {
     document.getElementById('sup-sitreps').textContent = D.sitreps.length;
     document.getElementById('sup-notif-count').textContent = D.notifications.filter(n=>!n.lu).length;
     document.getElementById('sup-urgences').textContent = D.notifications.filter(n=>n.urg).length;
+    if(document.getElementById('sup-esc')) document.getElementById('sup-esc').textContent = D.escortes.filter(e=>e.statut==='encours').length;
     
     let eh = '';
     TEAMS.forEach(t => {
@@ -473,48 +479,193 @@ window.delCap = async (id) => {
 };
 
 // ── MODULE ESCORTE (⚓) ────────────────────────────────────────────────
+const STATUTS_ESC = { planifiee: 'Planifiée', encours: 'En cours', terminee: 'Terminée', annulee: 'Annulée' };
+const ST_C_ESC = { planifiee: 'bw', encours: 'bv', terminee: 'bi', annulee: 'br' };
+
 function renderEscorte() {
+    const st = document.getElementById('esc-flt-st')?.value || '';
+    const ty = document.getElementById('esc-flt-ty')?.value || '';
+    const dt = document.getElementById('esc-flt-dt')?.value || '';
+    
+    let escs = D.escortes.slice().sort((a,b) => (a.date===b.date) ? b.heure.localeCompare(a.heure) : b.date.localeCompare(a.date));
+    
+    if(document.getElementById('esg-total')){
+      document.getElementById('esg-total').textContent = escs.length;
+      document.getElementById('esg-plan').textContent = escs.filter(e=>e.statut==='planifiee').length;
+      document.getElementById('esg-encours').textContent = escs.filter(e=>e.statut==='encours').length;
+      document.getElementById('esg-done').textContent = escs.filter(e=>e.statut==='terminee').length;
+    }
+    
+    if(st) escs = escs.filter(e => e.statut === st);
+    if(ty) escs = escs.filter(e => e.type === ty);
+    if(dt) escs = escs.filter(e => e.date === dt);
+    
     const list = document.getElementById('escorte-list');
-    if(!D.escortes.length) { list.innerHTML = '<div class="empty">Aucune mission d\'escorte.</div>'; return; }
-    list.innerHTML = D.escortes.map(e => `
-        <div class="sit-card">
-            <div class="flex-b">
-                <div><strong>MISSION ${e.num}</strong><br><small>${fmt(e.date)} - ${e.heure}</small></div>
-                <div class="flex"><span class="badge bi">${e.statut}</span><button class="btn" onclick="editEsc('${e.id}')">Editer</button></div>
+    if(document.getElementById('esc-count-lbl')) document.getElementById('esc-count-lbl').textContent = escs.length + ' MISSION(S)';
+    if(!escs.length) { list.innerHTML = '<div class="empty">Aucune mission trouvée.</div>'; return; }
+    
+    list.innerHTML = escs.map(e => `
+        <div class="sit-card" style="${e.statut==='encours'?'border-color:#27ae60':''}">
+            <div class="flex-b" style="margin-bottom:12px">
+                <div class="flex">
+                    <div class="sit-num">${e.num}</div>
+                    <div><strong>MISSION D'ESCORTE</strong><div style="font-size:11px;color:var(--color-text-secondary)">${fmt(e.date)} · ${e.heure} · ${tBadge(e.equipe)}</div></div>
+                </div>
+                <div class="flex">
+                    <span class="badge ${ST_C_ESC[e.statut]||'bi'}">${STATUTS_ESC[e.statut]||e.statut}</span>
+                    <button class="btn btn-gold" style="font-size:10px" onclick="editEsc('${e.id}')">Editer</button>
+                    <button class="btn btn-danger" style="font-size:10px" onclick="delEsc('${e.id}')">×</button>
+                </div>
             </div>
-            <div style="font-size:12px;margin-top:8px">Cible: ${e.cible_nom} (${e.cible_type}) | Escorteur: ${e.nav_nom}</div>
+            <div class="g2">
+                <div style="background:rgba(0,0,0,.02);padding:10px;border-radius:6px">
+                    <div style="font-size:10px;font-weight:700;color:var(--color-text-secondary);margin-bottom:6px">NAVIRE À ESCORTER (CIBLE)</div>
+                    <div style="font-size:12px"><strong>${e.cible_nom}</strong> (${e.cible_type})</div>
+                    <div style="font-size:11px">IMO: ${e.cible_imo||'—'} | MMSI: ${e.cible_mmsi||'—'} | Pavillon: ${e.cible_pavillon||'—'}</div>
+                    <div style="font-size:11px">Trajet: ${e.cible_from||'—'} ➔ ${e.cible_to||'—'}</div>
+                </div>
+                <div style="background:rgba(0,0,0,.02);padding:10px;border-radius:6px">
+                    <div style="font-size:10px;font-weight:700;color:var(--color-text-secondary);margin-bottom:6px">NAVIRE ESCORTEUR</div>
+                    <div style="font-size:12px"><strong>${e.nav_nom||'—'}</strong> (${e.nav_type})</div>
+                    <div style="font-size:11px">CMD: ${e.nav_cmd||'—'} | Equipage: ${e.nav_effectif||'—'}</div>
+                    <div style="font-size:11px">Zone: ${e.zone||'—'} | RDV: ${e.rdv||'—'} | VHF: ${e.nav_vhf||'—'}</div>
+                </div>
+            </div>
+            ${e.comment ? `<div style="font-size:11px;margin-top:10px;padding:6px;background:rgba(0,0,0,.03);border-radius:4px"><strong>Obs:</strong> ${e.comment}</div>` : ''}
+            <div class="flex" style="margin-top:10px;gap:5px;justify-content:flex-end">
+                <div style="font-size:10px;font-weight:600;margin-right:10px;color:var(--color-text-secondary)">STATUT :</div>
+                <button class="btn ${e.statut==='planifiee'?'btn-info':''}" style="font-size:9px" onclick="changeEscStatut('${e.id}', 'planifiee')">Planifiée</button>
+                <button class="btn ${e.statut==='encours'?'btn-info':''}" style="font-size:9px" onclick="changeEscStatut('${e.id}', 'encours')">En cours</button>
+                <button class="btn ${e.statut==='terminee'?'btn-info':''}" style="font-size:9px" onclick="changeEscStatut('${e.id}', 'terminee')">Terminée</button>
+                <button class="btn ${e.statut==='annulee'?'btn-danger':''}" style="font-size:9px" onclick="changeEscStatut('${e.id}', 'annulee')">Annulée</button>
+            </div>
         </div>
     `).join('');
 }
 
+window.openEscForm = (reset) => {
+    document.getElementById('escorte-form').style.display='block';
+    if(reset) {
+        document.getElementById('esc-edit-id').value='';
+        document.querySelectorAll('#escorte-form input, #escorte-form textarea').forEach(el => {
+            if(el.type !== 'hidden') el.value = '';
+        });
+        document.getElementById('esc-type').value = 'entree';
+        document.getElementById('esc-equipe').value = getTeam(tod());
+        document.getElementById('esc-cible-type').value = 'cargo';
+        document.getElementById('esc-nav-type').value = 'patrouilleur';
+        document.getElementById('esc-date').value = tod();
+        document.getElementById('esc-heure').value = nowT();
+        
+        // Auto-increment Num
+        const lastNum = D.escortes.length ? Math.max(...D.escortes.map(s => parseInt(s.num.replace(/[^0-9]/g, ''))||0)) : 0;
+        document.getElementById('esc-num').value = 'ESC-' + String(lastNum + 1).padStart(3, '0');
+    }
+};
+
 window.editEsc = (id) => {
     const e = D.escortes.find(x => x.id === id); if(!e) return;
-    document.getElementById('esc-num').value = e.num;
-    document.getElementById('esc-date').value = e.date;
-    document.getElementById('esc-heure').value = e.heure;
-    document.getElementById('esc-cible-nom').value = e.cible_nom;
+    document.querySelectorAll('#escorte-form input, #escorte-form select, #escorte-form textarea').forEach(el => {
+        if(el.id && el.id.startsWith('esc-') && el.id !== 'esc-edit-id' && !el.id.startsWith('esc-flt')) {
+            const key = el.id.replace(/^esc-/, '').replace(/-/g, '_');
+            if (e[key] !== undefined && e[key] !== null) {
+                if(el.type === 'datetime-local' && e[key]) {
+                    el.value = new Date(e[key]).toISOString().slice(0,16);
+                } else {
+                    el.value = e[key];
+                }
+            }
+        }
+    });
     document.getElementById('esc-edit-id').value = id;
     document.getElementById('escorte-form').style.display = 'block';
+    document.getElementById('escorte-form').scrollIntoView({behavior:'smooth'});
 };
 
 window.saveEsc = async () => {
-    const e = { num: document.getElementById('esc-num').value, date: document.getElementById('esc-date').value, heure: document.getElementById('esc-heure').value, cible_nom: document.getElementById('esc-cible-nom').value, statut: 'planifiee' };
+    const e = {};
+    document.querySelectorAll('#escorte-form input, #escorte-form select, #escorte-form textarea').forEach(el => {
+        if(el.id && el.id.startsWith('esc-') && el.id !== 'esc-edit-id' && !el.id.startsWith('esc-flt')) {
+            const key = el.id.replace(/^esc-/, '').replace(/-/g, '_');
+            if(el.type === 'number') e[key] = el.value ? Number(el.value) : null;
+            else e[key] = el.value || null;
+        }
+    });
+
     const eid = document.getElementById('esc-edit-id').value;
     try {
         if(eid) await api('/escortes/'+eid, {method:'PUT', body:JSON.stringify(e)});
-        else await api('/escortes', {method:'POST', body:JSON.stringify(e)});
+        else {
+            e.statut = 'planifiee';
+            await api('/escortes', {method:'POST', body:JSON.stringify(e)});
+        }
         await load(); document.getElementById('escorte-form').style.display='none'; renderEscorte();
-    } catch(err) {}
+        pushN('info', 'Escorte ' + e.num, 'Mission enregistrée');
+    } catch(err) { alert(err.message); }
+};
+
+window.changeEscStatut = async (id, statut) => {
+    try { await api('/escortes/'+id+'/statut', {method:'PATCH', body:JSON.stringify({statut})}); await load(); renderEscorte(); } catch(e){}
+};
+
+window.delEsc = async (id) => {
+    if(!confirm('Supprimer définitivement cette mission ?')) return;
+    try { await api('/escortes/'+id, {method:'DELETE'}); await load(); renderEscorte(); } catch(e){}
 };
 
 // ── INITIALISATION ET EVENT LISTENERS ─────────────────────────────────
+window.doLogin = () => {
+    const sid = document.getElementById('login-op').value;
+    if(!sid) return;
+    localStorage.setItem('jocc_user', sid);
+    window.location.reload();
+};
+
+window.doLogout = () => {
+    if(!confirm('Êtes-vous sûr de vouloir vous déconnecter du terminal ?')) return;
+    localStorage.removeItem('jocc_user');
+    window.location.reload();
+};
+
 window.addEventListener('DOMContentLoaded', async () => {
     await load();
+    
+    const sid = localStorage.getItem('jocc_user');
+    const u = D.operators.find(o => o.id === sid);
+    
+    if(u) {
+        window.currentUser = u;
+        document.getElementById('login-overlay').style.display='none';
+        const uNameLabel = document.getElementById('hdr-user-name');
+        if(uNameLabel) uNameLabel.textContent = `${u.grade} ${u.nom}`;
+    } else {
+        const overlay = document.getElementById('login-overlay');
+        if(overlay) overlay.style.display='flex';
+        const sel = document.getElementById('login-op');
+        if(sel) {
+            sel.innerHTML = '<option value="">-- Renseignez votre profil --</option>' + 
+                D.operators.sort((a,b)=>a.nom.localeCompare(b.nom)).map(o => `<option value="${o.id}">${o.grade} ${o.nom} (${o.poste})</option>`).join('');
+        }
+        return; // Halt proper initialization completely until logged in
+    }
+
+    // Apply strict pure RBAC UI controls
+    const isSup = window.currentUser.poste === 'supervision';
+    document.querySelectorAll('[data-tab="supervision"], [data-tab="operators"], #btn-config-rot').forEach(el => {
+        if(el) el.style.display = isSup ? '' : 'none';
+    });
+
     showTab('dashboard');
 
-    // Navigation
+    // Navigation (with strict fallback constraint)
     document.querySelectorAll('.nb').forEach(b => {
-        b.onclick = () => showTab(b.dataset.tab);
+        b.onclick = () => {
+            if(!isSup && (b.dataset.tab==='supervision' || b.dataset.tab==='operators')) {
+                alert('Action interdite : Privilèges Superviseur requis.');
+                return;
+            }
+            showTab(b.dataset.tab);
+        };
     });
 
     // Binding des boutons globaux (ceux qui n'ont pas de onclick dans index.html)
@@ -525,7 +676,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         ['sit-save', saveSitrep],
         ['btn-save-cfg', async () => {
             const cfg = { refDate: document.getElementById('cfg-date').value, refTeam: document.getElementById('cfg-team').value };
-            await api('/config', { method: 'POST', body: JSON.stringify(cfg) });
+            await api('/config', { method: 'PUT', body: JSON.stringify(cfg) });
             await load(); renderCal(); renderDash();
         }],
         ['cal-prev', () => { calM--; if(calM<0){calM=11;calY--;} renderCal(); }],
@@ -551,8 +702,9 @@ window.addEventListener('DOMContentLoaded', async () => {
         }],
         ['abs-cancel', () => document.getElementById('abs-form').style.display='none'],
         ['abs-save', saveAbs],
-        ['btn-new-escorte', () => { document.getElementById('escorte-form').style.display='block'; document.getElementById('esc-edit-id').value=''; }],
+        ['btn-new-escorte', () => openEscForm(true)],
         ['escorte-cancel', () => document.getElementById('escorte-form').style.display='none'],
+        ['esc-cancel2', () => document.getElementById('escorte-form').style.display='none'],
         ['esc-save', saveEsc]
     ];
 
@@ -564,6 +716,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Filters
     ['sitrep-filter-eq', 'sitrep-filter-date'].forEach(id => {
         const el = document.getElementById(id); if(el) el.onchange = renderSitrep;
+    });
+    ['esc-flt-st', 'esc-flt-ty', 'esc-flt-dt'].forEach(id => {
+        const el = document.getElementById(id); if(el) el.onchange = renderEscorte;
     });
     const opFilt = document.getElementById('filter-eq'); if(opFilt) opFilt.onchange = renderOps;
 });

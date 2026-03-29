@@ -67,6 +67,14 @@ const ok  = (res, data)          => res.json({ success: true, data });
 const err = (res, msg, code=500) => res.status(code).json({ success: false, error: msg });
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
+const requireRole = (role) => (req, res, next) => {
+  const userRole = req.headers['x-jocc-role'];
+  if (!userRole || userRole !== role) {
+    return err(res, `Accès refusé. Privilèges [${role}] requis. (Opération Backend bloquée)`, 403);
+  }
+  next();
+};
+
 // ═══════════════════════════════════════════════════════════════
 // API CONFIG (rotation des équipes)
 // ═══════════════════════════════════════════════════════════════
@@ -78,7 +86,7 @@ app.get('/api/config', async (req, res) => {
   } catch (e) { err(res, e.message); }
 });
 
-app.put('/api/config', async (req, res) => {
+app.put('/api/config', requireRole('supervision'), async (req, res) => {
   try {
     const { refDate, refTeam } = req.body;
     if (!refDate || !refTeam) return err(res, 'refDate et refTeam requis', 400);
@@ -102,7 +110,7 @@ app.get('/api/operateurs', async (req, res) => {
   } catch (e) { err(res, e.message); }
 });
 
-app.post('/api/operateurs', async (req, res) => {
+app.post('/api/operateurs', requireRole('supervision'), async (req, res) => {
   try {
     const { id, nom, prenom, grade, equipe, poste, actif } = req.body;
     if (!nom || !prenom) return err(res, 'Nom et prénom requis', 400);
@@ -115,7 +123,7 @@ app.post('/api/operateurs', async (req, res) => {
   } catch (e) { err(res, e.message); }
 });
 
-app.put('/api/operateurs/:id', async (req, res) => {
+app.put('/api/operateurs/:id', requireRole('supervision'), async (req, res) => {
   try {
     const { nom, prenom, grade, equipe, poste, actif } = req.body;
     const r = await pool.query(
@@ -128,7 +136,7 @@ app.put('/api/operateurs/:id', async (req, res) => {
   } catch (e) { err(res, e.message); }
 });
 
-app.delete('/api/operateurs/:id', async (req, res) => {
+app.delete('/api/operateurs/:id', requireRole('supervision'), async (req, res) => {
   try {
     const r = await pool.query('DELETE FROM operateurs WHERE id=$1 RETURNING id', [req.params.id]);
     if (!r.rows.length) return err(res, 'Opérateur non trouvé', 404);
