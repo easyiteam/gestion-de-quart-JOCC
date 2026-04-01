@@ -153,6 +153,21 @@ CREATE TABLE IF NOT EXISTS consignes (
   created_at  TIMESTAMPTZ  DEFAULT NOW()
 );
 
+-- ─── REPORTING ENVIRONNEMENTAL ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS reporting_env (
+  id           VARCHAR(30) PRIMARY KEY,
+  date         DATE        NOT NULL,
+  equipe       CHAR(1)     CHECK (equipe IN ('A','B','C','D')),
+  redacteur_id VARCHAR(30) REFERENCES operateurs(id) ON DELETE SET NULL,
+  lignes       JSONB       NOT NULL DEFAULT '[]',
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT unique_reporting_env_date UNIQUE (date)
+);
+CREATE OR REPLACE TRIGGER trg_reporting_env_upd
+  BEFORE UPDATE ON reporting_env FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE INDEX IF NOT EXISTS idx_rep_env_date ON reporting_env(date DESC);
+
 -- ─── CAPTURES SURVEILLANCE ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS captures (
   id         VARCHAR(30) PRIMARY KEY,

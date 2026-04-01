@@ -111,6 +111,26 @@ async function applyMigrations() {
       await pool.query('ALTER TABLE operateurs ADD CONSTRAINT unique_oper_name UNIQUE (nom, prenom)');
     }
 
+    // Table reporting_env
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS reporting_env (
+        id           VARCHAR(30) PRIMARY KEY,
+        date         DATE        NOT NULL,
+        equipe       CHAR(1)     CHECK (equipe IN ('A','B','C','D')),
+        redacteur_id VARCHAR(30),
+        lignes       JSONB       NOT NULL DEFAULT '[]',
+        created_at   TIMESTAMPTZ DEFAULT NOW(),
+        updated_at   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='unique_reporting_env_date') THEN
+          ALTER TABLE reporting_env ADD CONSTRAINT unique_reporting_env_date UNIQUE (date);
+        END IF;
+      END $$
+    `);
+
     // Seed opérateurs si table vide
     const cnt = await pool.query('SELECT COUNT(*) FROM operateurs');
     if (parseInt(cnt.rows[0].count) === 0) {
@@ -246,6 +266,29 @@ app.delete('/api/operateurs/:id', requireRole('supervision'), async (req, res) =
     const r = await pool.query('DELETE FROM operateurs WHERE id=$1 RETURNING id', [req.params.id]);
     if (!r.rows.length) return err(res, 'Opérateur non trouvé', 404);
     ok(res, { deleted: req.params.id });
+  } catch (e) { err(res, e.message); }
+});
+
+// Changement de mot de passe (supervision peut tout changer; un opérateur peut changer le sien)
+app.put('/api/operateurs/:id/password', requireAuth, async (req, res) => {
+  try {
+    const { newPassword, currentPassword } = req.body;
+    if (!newPassword || newPassword.length < 4) return err(res, 'Mot de passe trop court (min. 4 car.)', 400);
+    const isSelf = req.user.id === req.params.id;
+    const isSup  = req.user.poste === 'supervision';
+    if (!isSelf && !isSup) return err(res, 'Action non autorisée', 403);
+    // Si changement de son propre mot de passe, vérifier l'ancien
+    if (isSelf && !isSup) {
+      if (!currentPassword) return err(res, 'Mot de passe actuel requis', 400);
+      const r2 = await pool.query('SELECT password_hash FROM operateurs WHERE id=$1', [req.params.id]);
+      if (!r2.rows.length) return err(res, 'Opérateur introuvable', 404);
+      const valid = await bcrypt.compare(currentPassword, r2.rows[0].password_hash || '');
+      if (!valid) return err(res, 'Mot de passe actuel incorrect', 401);
+    }
+    const hash = await bcrypt.hash(newPassword, 10);
+    const r = await pool.query('UPDATE operateurs SET password_hash=$1, updated_at=NOW() WHERE id=$2 RETURNING id', [hash, req.params.id]);
+    if (!r.rows.length) return err(res, 'Opérateur introuvable', 404);
+    ok(res, { updated: req.params.id });
   } catch (e) { err(res, e.message); }
 });
 
@@ -616,6 +659,65 @@ app.delete('/api/escortes/:id', async (req, res) => {
   try {
     const r = await pool.query('DELETE FROM escortes WHERE id=$1 RETURNING id', [req.params.id]);
     if (!r.rows.length) return err(res, 'Mission non trouvée', 404);
+    ok(res, { deleted: req.params.id });
+  } catch (e) { err(res, e.message); }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// API REPORTING ENVIRONNEMENTAL
+// ═══════════════════════════════════════════════════════════════
+
+const ENV_ACTIVITES = [
+  'Déversements',
+  'Intrusions des pêcheurs',
+  'Espèces migratoires (cétacés, tortues marines, lamantins, baleine) morts, blessés ou vivants',
+  'Incidents environnementaux ou de sûreté liés aux trafics portuaires',
+  'Autres',
+];
+const LIGNES_VIDES = ENV_ACTIVITES.map((activite, i) => ({
+  num: i + 1, activite, constats: '', zones: [], commentaires: '',
+}));
+
+app.get('/api/reporting-env', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM reporting_env ORDER BY date DESC');
+    ok(res, r.rows);
+  } catch (e) { err(res, e.message); }
+});
+
+app.get('/api/reporting-env/:date', async (req, res) => {
+  try {
+    const { date } = req.params;
+    let r = await pool.query('SELECT * FROM reporting_env WHERE date=$1', [date]);
+    if (!r.rows.length) {
+      const equipe = req.query.equipe || 'A';
+      r = await pool.query(
+        `INSERT INTO reporting_env (id, date, equipe, redacteur_id, lignes)
+         VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+        [genId(), date, equipe, null, JSON.stringify(LIGNES_VIDES)]
+      );
+    }
+    ok(res, r.rows[0]);
+  } catch (e) { err(res, e.message); }
+});
+
+app.put('/api/reporting-env/:date', requireAuth, async (req, res) => {
+  try {
+    const { equipe, redacteur_id, lignes } = req.body;
+    const r = await pool.query(
+      `UPDATE reporting_env SET equipe=$1, redacteur_id=$2, lignes=$3, updated_at=NOW()
+       WHERE date=$4 RETURNING *`,
+      [equipe, redacteur_id || null, JSON.stringify(lignes), req.params.date]
+    );
+    if (!r.rows.length) return err(res, 'Rapport introuvable', 404);
+    ok(res, r.rows[0]);
+  } catch (e) { err(res, e.message); }
+});
+
+app.delete('/api/reporting-env/:id', requireRole('supervision'), async (req, res) => {
+  try {
+    const r = await pool.query('DELETE FROM reporting_env WHERE id=$1 RETURNING id', [req.params.id]);
+    if (!r.rows.length) return err(res, 'Rapport introuvable', 404);
     ok(res, { deleted: req.params.id });
   } catch (e) { err(res, e.message); }
 });

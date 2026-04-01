@@ -973,7 +973,10 @@
           <div class="hdr-name"><span style="color:rgba(200,164,74,.95)">Préfecture Maritime</span> · JOCC</div>
           <div class="hdr-tagline">Joint Operations Command Center · Gestion des Quarts</div>
           <div class="hdr-live" style="display:flex;align-items:center;gap:10px">
-            <div><span class="hdr-live-dot"></span><span class="hdr-live-txt" id="hdr-user-name">Non connecté</span></div>
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <div><span class="hdr-live-dot"></span><span class="hdr-live-txt" id="hdr-user-name">Non connecté</span></div>
+              <span id="hdr-role-badge" style="font-size:9px;opacity:.6;letter-spacing:.5px;padding-left:14px"></span>
+            </div>
             <button class="btn" style="padding:2px 8px;font-size:9px" onclick="doLogout()">Déconnexion</button>
           </div>
         </div>
@@ -1013,6 +1016,7 @@
       <button class="nb" data-tab="escorte">Missions d'Escorte</button>
       <button class="nb" data-tab="supervision">Supervision <span class="nd" id="notif-dot"
           style="display:none"></span></button>
+      <button class="nb" data-tab="reporting-env">Rpt. Env.</button>
       <button class="nb" data-tab="fichiers">Fichiers</button>
     </div>
 
@@ -1215,6 +1219,13 @@
         <input type="hidden" id="op-edit-id">
         <button class="btn btn-info" id="op-save">Enregistrer</button>
       </div>
+      <!-- Changer son propre mot de passe -->
+      <div class="card mb10" style="font-size:12px">
+        <div class="flex-b">
+          <span style="color:var(--color-text-secondary)">Changer votre mot de passe personnel</span>
+          <button class="btn" onclick="openPwModal(window.currentUser?.id, true)">Modifier →</button>
+        </div>
+      </div>
       <div class="tw">
         <table>
           <thead>
@@ -1224,7 +1235,7 @@
               <th>Éq.</th>
               <th>Poste</th>
               <th>Statut</th>
-              <th></th>
+              <th data-role="supervision"></th>
             </tr>
           </thead>
           <tbody id="ops-body"></tbody>
@@ -1441,6 +1452,87 @@
   </div>
 
   <!-- ═══ ESCORTE TAB ═══ -->
+  <!-- ── REPORTING ENVIRONNEMENTAL ── -->
+  <div id="tab-reporting-env" class="tab" style="display:none">
+    <div class="flex-b mb10">
+      <div>
+        <div style="font-size:14px;font-weight:700;letter-spacing:.06em">REPORTING ENVIRONNEMENTAL JOURNALIER</div>
+        <div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">Formulaire de surveillance · Préfecture Maritime du Bénin</div>
+      </div>
+      <div class="flex" style="gap:6px">
+        <button class="btn btn-info" id="btn-load-renv">Charger / Créer</button>
+        <button class="btn" id="btn-save-renv" style="display:none">Enregistrer</button>
+        <button class="btn" id="btn-print-renv" style="display:none" onclick="printRenv()">🖨 Imprimer</button>
+        <button class="btn btn-danger" id="btn-del-renv" style="display:none;font-size:11px" data-role="supervision">Supprimer</button>
+      </div>
+    </div>
+    <!-- Sélecteurs date / rédacteur -->
+    <div class="card mb10">
+      <div class="g2" style="align-items:flex-end">
+        <div class="fg" style="margin:0"><label>Jour du</label><input type="date" id="renv-date"></div>
+        <div class="fg" style="margin:0"><label>Équipe de quart</label><select id="renv-equipe">
+          <option value="A">Équipe A</option><option value="B">Équipe B</option>
+          <option value="C">Équipe C</option><option value="D">Équipe D</option>
+        </select></div>
+        <div class="fg" style="margin:0"><label>Rédacteur</label><select id="renv-redacteur"><option value="">-- Choisir --</option></select></div>
+      </div>
+    </div>
+    <!-- Formulaire principal -->
+    <div id="renv-form-wrap" style="display:none">
+      <div class="card" style="padding:0;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:rgba(200,164,74,.12)">
+              <th style="padding:10px 8px;width:28px;border-bottom:1px solid var(--color-border);text-align:center">N°</th>
+              <th style="padding:10px 8px;width:200px;border-bottom:1px solid var(--color-border)">Activités de surveillance</th>
+              <th style="padding:10px 8px;border-bottom:1px solid var(--color-border)">Constats <span style="font-weight:400;opacity:.7">(à décrire)</span></th>
+              <th style="padding:10px 8px;width:200px;border-bottom:1px solid var(--color-border);text-align:center">Zone de constat <span style="font-weight:400;opacity:.7">(à cocher)</span></th>
+              <th style="padding:10px 8px;width:170px;border-bottom:1px solid var(--color-border)">Commentaires</th>
+            </tr>
+          </thead>
+          <tbody id="renv-tbody"></tbody>
+        </table>
+      </div>
+      <div class="card" style="margin-top:8px;font-size:11px;color:var(--color-text-secondary);font-style:italic">
+        <strong>NB :</strong> Décrire les constats en précisant la nature, la période d'observation, la localisation, l'étendue.
+      </div>
+    </div>
+    <!-- Historique -->
+    <div class="card" style="margin-top:12px">
+      <div class="flex-b mb8">
+        <div style="font-weight:600;font-size:12px;letter-spacing:.05em">HISTORIQUE DES RAPPORTS</div>
+        <span id="renv-hist-count" style="font-size:11px;color:var(--color-text-secondary)"></span>
+      </div>
+      <div id="renv-hist"></div>
+    </div>
+  </div>
+
+  <!-- ── MODAL CHANGEMENT MOT DE PASSE ── -->
+  <div id="modal-pw" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:3000;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);align-items:center;justify-content:center">
+    <div style="background:var(--color-background-secondary);border:1px solid var(--color-border);border-radius:12px;padding:28px;width:340px;box-shadow:0 20px 40px rgba(0,0,0,.4)">
+      <div style="font-weight:700;font-size:13px;letter-spacing:.05em;margin-bottom:18px">CHANGEMENT DE MOT DE PASSE</div>
+      <div id="modal-pw-target-name" style="font-size:12px;color:var(--color-text-secondary);margin-bottom:14px"></div>
+      <div id="modal-pw-current-wrap" class="fg" style="margin-bottom:10px">
+        <label>Mot de passe actuel</label>
+        <input type="password" id="modal-pw-current" placeholder="••••••••">
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Nouveau mot de passe</label>
+        <input type="password" id="modal-pw-new" placeholder="••••••••">
+      </div>
+      <div class="fg" style="margin-bottom:16px">
+        <label>Confirmer</label>
+        <input type="password" id="modal-pw-confirm" placeholder="••••••••">
+      </div>
+      <div id="modal-pw-err" style="display:none;color:#f87171;font-size:11px;margin-bottom:10px"></div>
+      <input type="hidden" id="modal-pw-op-id">
+      <div class="flex" style="gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="document.getElementById('modal-pw').style.display='none'">Annuler</button>
+        <button class="btn btn-info" onclick="savePwChange()">Valider</button>
+      </div>
+    </div>
+  </div>
+
   <div id="tab-escorte" class="tab" style="display:none">
     <div class="card-dk mb12">
       <div class="flex-b">

@@ -34,6 +34,43 @@ function sups() { return D.operators.filter(o => o.poste === 'supervision' && o.
 
 window.currentUser = null;
 
+// ── PERMISSIONS ────────────────────────────────────────────────────────
+const ROLE_LEVEL = { permanence: 1, veille: 2, radio: 2, chef: 3, supervision: 4 };
+function can(action) {
+    const lv = ROLE_LEVEL[window.currentUser?.poste] ?? 0;
+    const map = {
+        manage_operators: 4, config_rotation: 4, clear_notifications: 4,
+        validate_absence: 4, reset_any_password: 4,
+        delete_sitrep: 3, delete_event: 3, manage_escortes: 3,
+        delete_absence: 3, manage_consignes: 3, manage_captures: 3, edit_rapport_chef: 3,
+        create_sitrep: 1, create_absence: 1, add_event: 1,
+    };
+    return lv >= (map[action] ?? 99);
+}
+function applyRBAC() {
+    const role = window.currentUser?.poste;
+    const isSup = role === 'supervision';
+    // Tabs
+    document.querySelectorAll('[data-tab="supervision"],[data-tab="operators"]').forEach(el => {
+        el.style.display = isSup ? '' : 'none';
+    });
+    document.querySelector('#btn-config-rot')?.style && (document.querySelector('#btn-config-rot').style.display = isSup ? '' : 'none');
+    // Buttons with data-role attr
+    document.querySelectorAll('[data-role]').forEach(el => {
+        const req = el.getAttribute('data-role');
+        const needed = ROLE_LEVEL[req] ?? 99;
+        el.style.display = (ROLE_LEVEL[role] ?? 0) >= needed ? '' : 'none';
+    });
+    // Nav handler
+    document.querySelectorAll('.nb').forEach(b => {
+        b.onclick = () => {
+            const t = b.dataset.tab;
+            if (!isSup && (t === 'supervision' || t === 'operators')) return;
+            showTab(t);
+        };
+    });
+}
+
 // ── API HELPERS ────────────────────────────────────────────────────────
 async function api(path, options = {}) {
     const headers = { 'Content-Type': 'application/json', ...options.headers };
@@ -100,7 +137,8 @@ async function showTab(n) {
     const renderers = {
         dashboard: renderDash, sitrep: renderSitrep, planning: renderCal,
         operators: renderOps, absences: renderAbs, supervision: renderSup,
-        fichiers: renderFichiers, escorte: renderEscorte
+        fichiers: renderFichiers, escorte: renderEscorte,
+        'reporting-env': renderReportingEnv
     };
     renderers[n]?.();
 }
@@ -256,21 +294,26 @@ window.printSitrep = (id) => {
 };
 
 // ── OPERATORS MODULE ──────────────────────────────────────────────────
+const POSTE_BADGE = { supervision:'bsup', chef:'bi', radio:'bw', veille:'bi', permanence:'bi' };
 function renderOps() {
     const filt = document.getElementById('filter-eq').value;
     let ops = D.operators; if(filt) ops = ops.filter(o => o.equipe === filt);
     const tbody = document.getElementById('ops-body'); tbody.innerHTML = '';
+    const isSup = can('manage_operators');
     ops.forEach(o => {
-        tbody.innerHTML += `<tr>
-            <td><strong>${o.nom}</strong> ${o.prenom}</td>
+        const isMe = o.id === window.currentUser?.id;
+        const actions = isSup ? `
+            <button class="btn" onclick="editOp('${o.id}')">Modifier</button>
+            <button class="btn" onclick="openPwModal('${o.id}',false)" title="Réinitialiser MDP">🔑</button>
+            <button class="btn btn-danger" onclick="delOp('${o.id}')" title="Supprimer">×</button>
+        ` : (isMe ? `<button class="btn" onclick="openPwModal('${o.id}',true)">Mon MDP</button>` : '');
+        tbody.innerHTML += `<tr ${isMe ? 'style="background:rgba(200,164,74,.06)"' : ''}>
+            <td><strong>${o.nom}</strong> ${o.prenom}${isMe ? ' <span style="font-size:10px;opacity:.5">(vous)</span>' : ''}</td>
             <td>${o.grade}</td>
             <td>${tBadge(o.equipe)}</td>
-            <td>${POSTES[o.poste]||o.poste}</td>
+            <td><span class="badge ${POSTE_BADGE[o.poste]||'bi'}">${POSTES[o.poste]||o.poste}</span></td>
             <td><span class="badge ${o.actif?'bv':'br'}">${o.actif?'Actif':'Inactif'}</span></td>
-            <td>
-                <button class="btn" onclick="editOp('${o.id}')">Mod.</button>
-                <button class="btn btn-danger" onclick="delOp('${o.id}')">×</button>
-            </td>
+            <td>${actions}</td>
         </tr>`;
     });
 }
@@ -616,6 +659,192 @@ window.delEsc = async (id) => {
     try { await api('/escortes/'+id, {method:'DELETE'}); await load(); renderEscorte(); } catch(e){}
 };
 
+// ── MOT DE PASSE ──────────────────────────────────────────────────────
+window.openPwModal = (opId, isSelf) => {
+    const op = D.operators.find(o => o.id === opId);
+    document.getElementById('modal-pw-op-id').value = opId;
+    document.getElementById('modal-pw-target-name').textContent = op ? `${op.grade} ${op.nom} ${op.prenom}` : '';
+    document.getElementById('modal-pw-current-wrap').style.display = isSelf ? '' : 'none';
+    document.getElementById('modal-pw-current').value = '';
+    document.getElementById('modal-pw-new').value = '';
+    document.getElementById('modal-pw-confirm').value = '';
+    document.getElementById('modal-pw-err').style.display = 'none';
+    document.getElementById('modal-pw').style.display = 'flex';
+};
+window.savePwChange = async () => {
+    const opId = document.getElementById('modal-pw-op-id').value;
+    const isSelf = opId === window.currentUser?.id;
+    const current = document.getElementById('modal-pw-current').value;
+    const np = document.getElementById('modal-pw-new').value;
+    const nc = document.getElementById('modal-pw-confirm').value;
+    const errEl = document.getElementById('modal-pw-err');
+    errEl.style.display = 'none';
+    if (np.length < 4) { errEl.textContent = 'Mot de passe trop court (min. 4 caractères)'; errEl.style.display = 'block'; return; }
+    if (np !== nc) { errEl.textContent = 'Les mots de passe ne correspondent pas'; errEl.style.display = 'block'; return; }
+    try {
+        const body = { newPassword: np };
+        if (isSelf) body.currentPassword = current;
+        await api('/operateurs/' + opId + '/password', { method: 'PUT', body: JSON.stringify(body) });
+        document.getElementById('modal-pw').style.display = 'none';
+        alert('Mot de passe mis à jour avec succès.');
+    } catch(e) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+};
+
+// ── REPORTING ENVIRONNEMENTAL ──────────────────────────────────────────
+const RENV_ACTIVITES = [
+    'Déversements',
+    'Intrusions des pêcheurs',
+    'Espèces migratoires (cétacés, tortues marines, lamantins, baleine) morts, blessés ou vivants',
+    'Incidents environnementaux ou de sûreté liés aux trafics portuaires',
+    'Autres',
+];
+const RENV_ZONES = ['AMP', 'Bassin', 'Chenal', 'Mouillage'];
+let renvCurrent = null;
+
+async function loadRenv() {
+    const date = document.getElementById('renv-date').value;
+    if (!date) { alert('Veuillez sélectionner une date'); return; }
+    const equipe = document.getElementById('renv-equipe').value;
+    try {
+        const r = await api('/reporting-env/' + date + '?equipe=' + equipe);
+        renvCurrent = r;
+        document.getElementById('renv-equipe').value = r.equipe || equipe;
+        // Rédacteur dropdown
+        const sel = document.getElementById('renv-redacteur');
+        sel.innerHTML = '<option value="">-- Choisir --</option>';
+        D.operators.filter(o => o.actif).sort((a,b) => a.nom.localeCompare(b.nom)).forEach(o => {
+            sel.innerHTML += `<option value="${o.id}" ${o.id === r.redacteur_id ? 'selected' : ''}>${o.grade} ${o.nom} ${o.prenom}</option>`;
+        });
+        renderRenvForm(r.lignes || []);
+        document.getElementById('renv-form-wrap').style.display = '';
+        document.getElementById('btn-save-renv').style.display = '';
+        document.getElementById('btn-print-renv').style.display = '';
+        document.getElementById('btn-del-renv').style.display = can('manage_operators') ? '' : 'none';
+    } catch(e) { alert(e.message); }
+}
+
+function renderRenvForm(lignes) {
+    const tbody = document.getElementById('renv-tbody');
+    tbody.innerHTML = '';
+    RENV_ACTIVITES.forEach((act, i) => {
+        const lg = lignes.find(l => l.num === i + 1) || { num: i+1, activite: act, constats: '', zones: [], commentaires: '' };
+        const zonesHtml = RENV_ZONES.map(z =>
+            `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;white-space:nowrap">
+              <input type="checkbox" data-renv-zone="${i+1}|${z}" ${(lg.zones||[]).includes(z)?'checked':''}> ${z}
+             </label>`
+        ).join('');
+        const even = i % 2 === 1 ? 'background:rgba(255,255,255,.02)' : '';
+        tbody.innerHTML += `<tr style="${even}">
+            <td style="text-align:center;padding:8px;border-bottom:1px solid var(--color-border);vertical-align:top;font-weight:700;color:rgba(200,164,74,.9)">${i+1}</td>
+            <td style="padding:8px;border-bottom:1px solid var(--color-border);vertical-align:top;font-size:11px;line-height:1.4">${act}</td>
+            <td style="padding:6px;border-bottom:1px solid var(--color-border);vertical-align:top">
+              <textarea data-renv-constats="${i+1}" rows="2" style="width:100%;resize:vertical;background:transparent;border:1px solid var(--color-border);border-radius:4px;color:inherit;font-size:11px;padding:5px;font-family:inherit">${lg.constats||''}</textarea>
+            </td>
+            <td style="padding:8px;border-bottom:1px solid var(--color-border);vertical-align:top">
+              <div style="display:flex;flex-direction:column;gap:5px">${zonesHtml}</div>
+            </td>
+            <td style="padding:6px;border-bottom:1px solid var(--color-border);vertical-align:top">
+              <textarea data-renv-comments="${i+1}" rows="2" style="width:100%;resize:vertical;background:transparent;border:1px solid var(--color-border);border-radius:4px;color:inherit;font-size:11px;padding:5px;font-family:inherit">${lg.commentaires||''}</textarea>
+            </td>
+        </tr>`;
+    });
+}
+
+function collectRenvLignes() {
+    return RENV_ACTIVITES.map((act, i) => {
+        const n = i + 1;
+        const constats = document.querySelector(`[data-renv-constats="${n}"]`)?.value || '';
+        const commentaires = document.querySelector(`[data-renv-comments="${n}"]`)?.value || '';
+        const zones = RENV_ZONES.filter(z => document.querySelector(`[data-renv-zone="${n}|${z}"]`)?.checked);
+        return { num: n, activite: act, constats, zones, commentaires };
+    });
+}
+
+window.saveRenv = async () => {
+    if (!renvCurrent) return;
+    const date = document.getElementById('renv-date').value;
+    const body = {
+        equipe: document.getElementById('renv-equipe').value,
+        redacteur_id: document.getElementById('renv-redacteur').value || null,
+        lignes: collectRenvLignes(),
+    };
+    try {
+        await api('/reporting-env/' + date, { method: 'PUT', body: JSON.stringify(body) });
+        await loadRenvHist();
+        alert('Rapport environnemental enregistré.');
+    } catch(e) { alert(e.message); }
+};
+
+window.delRenv = async () => {
+    if (!renvCurrent || !confirm('Supprimer ce rapport environnemental ?')) return;
+    try {
+        await api('/reporting-env/' + renvCurrent.id, { method: 'DELETE' });
+        renvCurrent = null;
+        document.getElementById('renv-form-wrap').style.display = 'none';
+        document.getElementById('btn-save-renv').style.display = 'none';
+        document.getElementById('btn-print-renv').style.display = 'none';
+        document.getElementById('btn-del-renv').style.display = 'none';
+        await loadRenvHist();
+    } catch(e) { alert(e.message); }
+};
+
+async function loadRenvHist() {
+    try {
+        const list = await api('/reporting-env');
+        const hist = document.getElementById('renv-hist');
+        const cnt = document.getElementById('renv-hist-count');
+        if (cnt) cnt.textContent = `${list.length} rapport(s)`;
+        if (!list.length) { hist.innerHTML = '<div class="empty">Aucun rapport enregistré.</div>'; return; }
+        hist.innerHTML = list.map(r => {
+            const red = D.operators.find(o => o.id === r.redacteur_id);
+            const lignesRens = (r.lignes||[]).filter(l => l.constats || (l.zones||[]).length).length;
+            return `<div class="ev-item" style="cursor:pointer" onclick="loadRenvFromHist('${r.date}')">
+                <div class="flex-b">
+                    <strong>${fmt(r.date)}</strong>
+                    <div class="flex" style="gap:6px">
+                        ${tBadge(r.equipe)}
+                        <span class="badge ${lignesRens?'bv':'bi'}">${lignesRens}/5 activité(s)</span>
+                    </div>
+                </div>
+                <div style="font-size:11px;color:var(--color-text-secondary);margin-top:3px">
+                    Rédacteur : ${red ? red.grade+' '+red.nom : '—'}
+                </div>
+            </div>`;
+        }).join('');
+    } catch(e) {}
+}
+
+window.loadRenvFromHist = (date) => {
+    document.getElementById('renv-date').value = date;
+    loadRenv();
+};
+
+window.printRenv = () => {
+    if (!renvCurrent) return;
+    const date = document.getElementById('renv-date').value;
+    const red = D.operators.find(o => o.id === renvCurrent.redacteur_id);
+    const lignes = collectRenvLignes();
+    const rows = lignes.map((l, i) => `
+        <tr>
+            <td style="text-align:center;padding:8px;border:1px solid #ccc;font-weight:bold">${i+1}</td>
+            <td style="padding:8px;border:1px solid #ccc;font-size:11px">${l.activite}</td>
+            <td style="padding:8px;border:1px solid #ccc;font-size:11px">${l.constats||''}</td>
+            <td style="padding:8px;border:1px solid #ccc;font-size:11px;text-align:center">${(l.zones||[]).join(', ')||''}</td>
+            <td style="padding:8px;border:1px solid #ccc;font-size:11px">${l.commentaires||''}</td>
+        </tr>`).join('');
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reporting Env. - ${date}</title>
+    <style>body{font-family:Arial,sans-serif;margin:20px;font-size:12px}h2{text-align:center}table{width:100%;border-collapse:collapse}th{background:#f0f0f0;padding:8px;border:1px solid #ccc;font-size:11px}</style></head><body>
+    <h2>Formulaire de reporting journalier</h2>
+    <p><strong>Jour du :</strong> ${fmt(date)} &nbsp;&nbsp; <strong>Équipe :</strong> ${renvCurrent.equipe} &nbsp;&nbsp; <strong>Rédacteur :</strong> ${red ? red.grade+' '+red.nom+' '+red.prenom : '—'}</p>
+    <table><thead><tr><th>N°</th><th>Activités de surveillance</th><th>Constats (à décrire)</th><th>Zone de constat</th><th>Commentaires</th></tr></thead><tbody>${rows}</tbody></table>
+    <p style="margin-top:16px;font-size:10px;font-style:italic"><strong>NB :</strong> Décrire les constats en précisant la nature, la période d'observation, la localisation, l'étendue.</p>
+    <script>window.print();<\/script></body></html>`);
+    w.document.close();
+};
+
+function renderReportingEnv() { loadRenvHist(); }
+
 // ── INITIALISATION ET EVENT LISTENERS ─────────────────────────────────
 window.doLogin = async () => {
     const id  = (document.getElementById('login-id')?.value || '').trim();
@@ -664,26 +893,16 @@ window.addEventListener('DOMContentLoaded', async () => {
     const uNameLabel = document.getElementById('hdr-user-name');
     if(uNameLabel) uNameLabel.textContent = `${window.currentUser.grade} ${window.currentUser.nom}`;
 
-    // Apply strict pure RBAC UI controls
-    const isSup = window.currentUser.poste === 'supervision';
-    document.querySelectorAll('[data-tab="supervision"], [data-tab="operators"], #btn-config-rot').forEach(el => {
-        if(el) el.style.display = isSup ? '' : 'none';
-    });
+    // ── Appliquer RBAC complet ─────────────────────────────────────
+    applyRBAC();
+
+    // ── Afficher le badge de rôle dans le header ──────────────────
+    const roleLabel = document.getElementById('hdr-role-badge');
+    if(roleLabel) { roleLabel.textContent = POSTES[window.currentUser.poste] || window.currentUser.poste; }
 
     showTab('dashboard');
 
-    // Navigation (with strict fallback constraint)
-    document.querySelectorAll('.nb').forEach(b => {
-        b.onclick = () => {
-            if(!isSup && (b.dataset.tab==='supervision' || b.dataset.tab==='operators')) {
-                alert('Action interdite : Privilèges Superviseur requis.');
-                return;
-            }
-            showTab(b.dataset.tab);
-        };
-    });
-
-    // Binding des boutons globaux (ceux qui n'ont pas de onclick dans index.html)
+    // ── Binding des boutons globaux ────────────────────────────────
     const binders = [
         ['btn-new-sitrep', () => openSitrepForm(true)],
         ['sitrep-cancel', () => document.getElementById('sitrep-form').style.display='none'],
@@ -698,6 +917,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         ['cal-next', () => { calM++; if(calM>11){calM=0;calY++;} renderCal(); }],
         ['cal-det-close', () => document.getElementById('cal-detail').style.display='none'],
         ['btn-new-op', () => {
+            if(!can('manage_operators')) return;
             document.getElementById('op-form').style.display = 'block';
             document.getElementById('op-form-title').textContent = 'Nouvel Opérateur';
             document.getElementById('op-edit-id').value = '';
@@ -720,7 +940,11 @@ window.addEventListener('DOMContentLoaded', async () => {
         ['btn-new-escorte', () => openEscForm(true)],
         ['escorte-cancel', () => document.getElementById('escorte-form').style.display='none'],
         ['esc-cancel2', () => document.getElementById('escorte-form').style.display='none'],
-        ['esc-save', saveEsc]
+        ['esc-save', saveEsc],
+        // Reporting env
+        ['btn-load-renv', loadRenv],
+        ['btn-save-renv', saveRenv],
+        ['btn-del-renv', delRenv],
     ];
 
     binders.forEach(([id, fn]) => {
@@ -728,7 +952,15 @@ window.addEventListener('DOMContentLoaded', async () => {
         if(el) el.onclick = fn;
     });
 
-    // Filters
+    // ── Masquer boutons réservés superviseurs ──────────────────────
+    if(!can('manage_operators')) {
+        document.getElementById('btn-new-op')?.style && (document.getElementById('btn-new-op').style.display = 'none');
+    }
+    if(!can('clear_notifications')) {
+        document.getElementById('btn-clear-notifs')?.style && (document.getElementById('btn-clear-notifs').style.display = 'none');
+    }
+
+    // ── Filters ───────────────────────────────────────────────────
     ['sitrep-filter-eq', 'sitrep-filter-date'].forEach(id => {
         const el = document.getElementById(id); if(el) el.onchange = renderSitrep;
     });
@@ -736,4 +968,11 @@ window.addEventListener('DOMContentLoaded', async () => {
         const el = document.getElementById(id); if(el) el.onchange = renderEscorte;
     });
     const opFilt = document.getElementById('filter-eq'); if(opFilt) opFilt.onchange = renderOps;
+
+    // Pré-remplir la date du reporting env avec aujourd'hui
+    const renvDateEl = document.getElementById('renv-date');
+    if(renvDateEl) renvDateEl.value = tod();
+    // Pré-sélectionner l'équipe du jour
+    const renvEqEl = document.getElementById('renv-equipe');
+    if(renvEqEl) renvEqEl.value = getTeam(tod());
 });
