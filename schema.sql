@@ -40,6 +40,9 @@ CREATE OR REPLACE TRIGGER trg_operateurs_upd
   BEFORE UPDATE ON operateurs FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE INDEX IF NOT EXISTS idx_oper_equipe ON operateurs(equipe);
 
+-- Ajout colonne password_hash pour les tables déjà existantes
+ALTER TABLE operateurs ADD COLUMN IF NOT EXISTS password_hash TEXT;
+
 -- Données initiales (17 opérateurs JOCC)
 INSERT INTO operateurs (id,nom,prenom,grade,equipe,poste,actif) VALUES
   ('op_a1','MARTIN',    'Jean',     'LV',  'A','chef',        true),
@@ -60,7 +63,7 @@ INSERT INTO operateurs (id,nom,prenom,grade,equipe,poste,actif) VALUES
   ('op_d4','VINCENT',   'Sandra',   'EV1', 'D','permanence',  true),
   ('op_s1','HOUNKPE',   'Romuald',  'CF',  'A','supervision', true),
   ('admin_01','ADMIN',  'Super',    'CDT', 'A','supervision', true)
-ON CONFLICT ON CONSTRAINT unique_oper_name DO NOTHING;
+ON CONFLICT (id) DO NOTHING;
 
 -- ─── SITREPS ────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS sitreps (

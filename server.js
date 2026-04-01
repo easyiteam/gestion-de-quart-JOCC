@@ -13,6 +13,11 @@ const morgan      = require('morgan');
 const compression = require('compression');
 const path        = require('path');
 const fs          = require('fs');
+const bcrypt      = require('bcryptjs');
+const jwt         = require('jsonwebtoken');
+
+const JWT_SECRET  = process.env.JWT_SECRET || 'jocc_jwt_secret_2026';
+const JWT_EXPIRES = '8h';
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -32,6 +37,8 @@ pool.connect()
     client.release();
     return initDatabase();
   })
+  .then(() => applyMigrations())
+  .then(() => seedPasswords())
   .catch(err => {
     console.error('❌ Connexion PostgreSQL échouée:', err.message);
     process.exit(1);
@@ -67,13 +74,111 @@ const ok  = (res, data)          => res.json({ success: true, data });
 const err = (res, msg, code=500) => res.status(code).json({ success: false, error: msg });
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-const requireRole = (role) => (req, res, next) => {
-  const userRole = req.headers['x-jocc-role'];
-  if (!userRole || userRole !== role) {
-    return err(res, `Accès refusé. Privilèges [${role}] requis. (Opération Backend bloquée)`, 403);
+// ─── AUTH MIDDLEWARE ──────────────────────────────────────────────────────
+const requireAuth = (req, res, next) => {
+  const auth = req.headers['authorization'];
+  if (!auth || !auth.startsWith('Bearer ')) return err(res, 'Non authentifié', 401);
+  try {
+    req.user = jwt.verify(auth.slice(7), JWT_SECRET);
+    next();
+  } catch (e) {
+    return err(res, 'Token invalide ou expiré', 401);
   }
-  next();
 };
+
+const requireRole = (role) => (req, res, next) => {
+  const auth = req.headers['authorization'];
+  if (!auth || !auth.startsWith('Bearer ')) return err(res, 'Non authentifié', 401);
+  try {
+    const user = jwt.verify(auth.slice(7), JWT_SECRET);
+    if (user.poste !== role) return err(res, `Privilèges [${role}] requis`, 403);
+    req.user = user;
+    next();
+  } catch (e) {
+    return err(res, 'Token invalide ou expiré', 401);
+  }
+};
+
+// ─── MIGRATIONS ──────────────────────────────────────────────────────────
+async function applyMigrations() {
+  try {
+    // Colonne password_hash
+    await pool.query('ALTER TABLE operateurs ADD COLUMN IF NOT EXISTS password_hash TEXT');
+
+    // Contrainte unicité nom+prenom si absente
+    const cc = await pool.query("SELECT 1 FROM pg_constraint WHERE conname='unique_oper_name'");
+    if (!cc.rows.length) {
+      await pool.query('ALTER TABLE operateurs ADD CONSTRAINT unique_oper_name UNIQUE (nom, prenom)');
+    }
+
+    // Seed opérateurs si table vide
+    const cnt = await pool.query('SELECT COUNT(*) FROM operateurs');
+    if (parseInt(cnt.rows[0].count) === 0) {
+      await pool.query(`
+        INSERT INTO operateurs (id,nom,prenom,grade,equipe,poste,actif) VALUES
+          ('op_a1','MARTIN',   'Jean',     'LV', 'A','chef',       true),
+          ('op_a2','DUBOIS',   'Marie',    'OIM','A','radio',      true),
+          ('op_a3','BERNARD',  'Paul',     'CC', 'A','veille',     true),
+          ('op_a4','THOMAS',   'Sophie',   'EV1','A','permanence', true),
+          ('op_b1','PETIT',    'Luc',      'LV', 'B','chef',       true),
+          ('op_b2','ROBERT',   'Anna',     'OIM','B','radio',      true),
+          ('op_b3','RICHARD',  'Marc',     'CC', 'B','veille',     true),
+          ('op_b4','SIMON',    'Julie',    'EV1','B','permanence', true),
+          ('op_c1','MOREAU',   'Eric',     'LV', 'C','chef',       true),
+          ('op_c2','LAURENT',  'Claire',   'OIM','C','radio',      true),
+          ('op_c3','GARCIA',   'Pierre',   'CC', 'C','veille',     true),
+          ('op_c4','LEROY',    'Isabelle', 'EV1','C','permanence', true),
+          ('op_d1','ADAM',     'Nicolas',  'LV', 'D','chef',       true),
+          ('op_d2','ROUX',     'Catherine','OIM','D','radio',      true),
+          ('op_d3','FOURNIER', 'Alain',    'CC', 'D','veille',     true),
+          ('op_d4','VINCENT',  'Sandra',   'EV1','D','permanence', true),
+          ('op_s1','HOUNKPE',  'Romuald',  'CF', 'A','supervision',true),
+          ('admin_01','ADMIN', 'Super',    'CDT','A','supervision',true)
+        ON CONFLICT (id) DO NOTHING
+      `);
+      console.log('✅ Opérateurs initiaux insérés');
+    }
+  } catch (e) {
+    console.error('⚠️  Erreur migration:', e.message);
+  }
+}
+
+// ─── SEED MOTS DE PASSE PAR DÉFAUT ───────────────────────────────────────
+async function seedPasswords() {
+  try {
+    const r = await pool.query('SELECT id FROM operateurs WHERE password_hash IS NULL');
+    if (!r.rows.length) return;
+    const hash = await bcrypt.hash('JOCC2026', 10);
+    await pool.query('UPDATE operateurs SET password_hash=$1 WHERE password_hash IS NULL', [hash]);
+    console.log(`✅ Mots de passe initialisés pour ${r.rows.length} opérateur(s) (JOCC2026)`);
+  } catch (e) {
+    console.error('⚠️  Erreur seedPasswords:', e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// API AUTH
+// ═══════════════════════════════════════════════════════════════
+
+app.post('/api/login', async (req, res) => {
+  const { id, password } = req.body;
+  if (!id || !password) return err(res, 'Identifiant et mot de passe requis', 400);
+  try {
+    const r = await pool.query('SELECT * FROM operateurs WHERE id=$1 AND actif=true', [id]);
+    if (!r.rows.length) return err(res, 'Identifiant ou mot de passe incorrect', 401);
+    const op = r.rows[0];
+    if (!op.password_hash) return err(res, 'Compte non configuré, contactez un superviseur', 401);
+    const valid = await bcrypt.compare(password, op.password_hash);
+    if (!valid) return err(res, 'Identifiant ou mot de passe incorrect', 401);
+    const payload = { id: op.id, nom: op.nom, prenom: op.prenom, grade: op.grade, equipe: op.equipe, poste: op.poste };
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+    ok(res, { token, user: payload });
+  } catch (e) { err(res, e.message); }
+});
+
+app.get('/api/me', requireAuth, (req, res) => {
+  ok(res, req.user);
+});
 
 // ═══════════════════════════════════════════════════════════════
 // API CONFIG (rotation des équipes)

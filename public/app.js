@@ -37,11 +37,14 @@ window.currentUser = null;
 // ── API HELPERS ────────────────────────────────────────────────────────
 async function api(path, options = {}) {
     const headers = { 'Content-Type': 'application/json', ...options.headers };
-    if(window.currentUser) {
-        headers['x-jocc-user'] = window.currentUser.id;
-        headers['x-jocc-role'] = window.currentUser.poste;
-    }
+    const token = localStorage.getItem('jocc_token');
+    if (token) headers['Authorization'] = 'Bearer ' + token;
     const res = await fetch('/api' + path, { ...options, headers });
+    if (res.status === 401) {
+        localStorage.removeItem('jocc_token');
+        window.location.reload();
+        return;
+    }
     const json = await res.json();
     if (!json.success) throw new Error(json.error || 'Erreur API');
     return json.data;
@@ -614,40 +617,52 @@ window.delEsc = async (id) => {
 };
 
 // ── INITIALISATION ET EVENT LISTENERS ─────────────────────────────────
-window.doLogin = () => {
-    const sid = document.getElementById('login-op').value;
-    if(!sid) return;
-    localStorage.setItem('jocc_user', sid);
-    window.location.reload();
+window.doLogin = async () => {
+    const id  = (document.getElementById('login-id')?.value || '').trim();
+    const pwd = document.getElementById('login-pwd')?.value || '';
+    if (!id || !pwd) return;
+    const btn  = document.getElementById('btn-login');
+    const errEl = document.getElementById('login-error');
+    btn.disabled = true; btn.textContent = 'CONNEXION...';
+    errEl.style.display = 'none';
+    try {
+        const res  = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, password: pwd }) });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error);
+        localStorage.setItem('jocc_token', json.data.token);
+        window.location.reload();
+    } catch(e) {
+        errEl.textContent = e.message || 'Erreur de connexion';
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'CONNEXION SÉCURISÉE';
+    }
 };
 
 window.doLogout = () => {
     if(!confirm('Êtes-vous sûr de vouloir vous déconnecter du terminal ?')) return;
-    localStorage.removeItem('jocc_user');
+    localStorage.removeItem('jocc_token');
     window.location.reload();
 };
 
 window.addEventListener('DOMContentLoaded', async () => {
-    await load();
-    
-    const sid = localStorage.getItem('jocc_user');
-    const u = D.operators.find(o => o.id === sid);
-    
-    if(u) {
-        window.currentUser = u;
-        document.getElementById('login-overlay').style.display='none';
-        const uNameLabel = document.getElementById('hdr-user-name');
-        if(uNameLabel) uNameLabel.textContent = `${u.grade} ${u.nom}`;
-    } else {
-        const overlay = document.getElementById('login-overlay');
-        if(overlay) overlay.style.display='flex';
-        const sel = document.getElementById('login-op');
-        if(sel) {
-            sel.innerHTML = '<option value="">-- Renseignez votre profil --</option>' + 
-                D.operators.sort((a,b)=>a.nom.localeCompare(b.nom)).map(o => `<option value="${o.id}">${o.grade} ${o.nom} (${o.poste})</option>`).join('');
-        }
-        return; // Halt proper initialization completely until logged in
+    // ── Vérification du token JWT ────────────────────────────────
+    const token = localStorage.getItem('jocc_token');
+    if (!token) { document.getElementById('login-overlay').style.display='flex'; return; }
+    try {
+        const r = await fetch('/api/me', { headers: { 'Authorization': 'Bearer ' + token } });
+        const j = await r.json();
+        if (!j.success) throw new Error(j.error);
+        window.currentUser = j.data;
+    } catch(e) {
+        localStorage.removeItem('jocc_token');
+        document.getElementById('login-overlay').style.display='flex';
+        return;
     }
+
+    await load();
+    document.getElementById('login-overlay').style.display='none';
+    const uNameLabel = document.getElementById('hdr-user-name');
+    if(uNameLabel) uNameLabel.textContent = `${window.currentUser.grade} ${window.currentUser.nom}`;
 
     // Apply strict pure RBAC UI controls
     const isSup = window.currentUser.poste === 'supervision';

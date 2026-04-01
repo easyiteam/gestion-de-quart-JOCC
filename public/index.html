@@ -898,21 +898,24 @@
       color: var(--color-text-secondary);
       text-align: left;
     }
-    .login-box select {
+    .login-input {
       width: 100%;
-      padding: 14px;
+      padding: 13px 14px;
       border-radius: 8px;
-      background: rgba(0,0,0,0.2);
+      background: rgba(0,0,0,0.25);
       border: 1px solid rgba(255,255,255,0.1);
       color: white;
       font-size: 14px;
-      appearance: none;
-      margin-bottom: 25px;
+      font-family: 'Rajdhani', sans-serif;
+      letter-spacing: 0.3px;
+      margin-bottom: 12px;
       outline: none;
+      box-sizing: border-box;
       transition: all 0.2s;
     }
-    .login-box select:hover { background: rgba(255,255,255,0.05); }
-    .login-box select:focus { border-color: var(--color-primary); }
+    .login-input:hover { background: rgba(255,255,255,0.05); }
+    .login-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 2px rgba(200,164,74,0.15); }
+    .login-input::placeholder { color: rgba(255,255,255,0.25); font-style: italic; }
 
     .btn-login {
       width: 100%;
@@ -944,10 +947,14 @@
       <div style="font-size:11px;color:var(--color-text-secondary);letter-spacing:1px">JOINT OPERATIONS COMMAND CENTER</div>
     </div>
     <div class="login-box">
-      <div style="margin-bottom:20px;font-size:14px;font-weight:600">IDENTIFICATION REQUISE</div>
-      <label style="text-align:left">Sélectionnez votre profil :</label>
-      <select id="login-op" style="margin-bottom:15px;background:var(--color-background-primary)"></select>
-      <button class="btn btn-gold" style="width:100%;font-size:13px;padding:10px" onclick="doLogin()">CONNEXION SÉCURISÉE</button>
+      <div style="margin-bottom:24px;font-size:14px;font-weight:700;letter-spacing:1.5px;color:rgba(200,164,74,.95)">IDENTIFICATION REQUISE</div>
+      <label>Identifiant opérateur</label>
+      <input type="text" id="login-id" class="login-input" placeholder="ex : op_a1, admin_01" autocomplete="username" spellcheck="false">
+      <label style="margin-top:4px">Mot de passe</label>
+      <input type="password" id="login-pwd" class="login-input" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+      <div id="login-error" style="display:none;color:#f87171;font-size:12px;margin:8px 0 4px;text-align:center;letter-spacing:0.3px"></div>
+      <button id="btn-login" class="btn btn-gold" style="width:100%;font-size:13px;padding:11px;margin-top:12px" onclick="doLogin()">CONNEXION SÉCURISÉE</button>
+      <div style="margin-top:16px;font-size:10px;color:rgba(255,255,255,0.2);letter-spacing:0.5px">MOT DE PASSE PAR DÉFAUT : JOCC2026</div>
     </div>
   </div>
 
