@@ -4,7 +4,7 @@
    ═══════════════════════════════════════════════════════════════ */
 
 const TEAMS = ['A', 'B', 'C', 'D'];
-const POSTES = { chef: 'Chef de quart', veille: 'Op. de veille', radio: 'Op. radio', permanence: 'Off. permanence', supervision: 'Superviseur' };
+const POSTES = { chef: 'Chef de quart', veille: 'Op. de veille', radio: 'Op. radio', permanence: 'Off. permanence', supervision: 'Superviseur', liaison: 'Off. de liaison' };
 const EV_L = { routine: 'Routine', info: 'Information', urgence: 'Urgence' };
 const EV_C = { routine: 'bi', info: 'bi', urgence: 'br' };
 const MOTIFS = { maladie: 'Maladie', conge: 'Congé', formation: 'Formation', mission: 'Mission', autre: 'Autre' };
@@ -35,7 +35,7 @@ function sups() { return D.operators.filter(o => o.poste === 'supervision' && o.
 window.currentUser = null;
 
 // ── PERMISSIONS ────────────────────────────────────────────────────────
-const ROLE_LEVEL = { permanence: 1, veille: 2, radio: 2, chef: 3, supervision: 4 };
+const ROLE_LEVEL = { permanence: 1, liaison: 1, veille: 2, radio: 2, chef: 3, supervision: 4 };
 function can(action) {
     const lv = ROLE_LEVEL[window.currentUser?.poste] ?? 0;
     const map = {
@@ -63,8 +63,15 @@ function applyRBAC() {
     });
     // Nav handler
     document.querySelectorAll('.nb').forEach(b => {
+        const t = b.dataset.tab;
+        const reqRole = b.getAttribute('data-role');
+        if (reqRole) {
+            const needed = ROLE_LEVEL[reqRole] ?? 99;
+            b.style.display = (ROLE_LEVEL[role] ?? 0) >= needed ? '' : 'none';
+        }
         b.onclick = () => {
-            const t = b.dataset.tab;
+            const needed = ROLE_LEVEL[b.getAttribute('data-role')] ?? 0;
+            if ((ROLE_LEVEL[role] ?? 0) < needed) return;
             if (!isSup && (t === 'supervision' || t === 'operators')) return;
             showTab(t);
         };
@@ -138,7 +145,8 @@ async function showTab(n) {
         dashboard: renderDash, sitrep: renderSitrep, planning: renderCal,
         operators: renderOps, absences: renderAbs, supervision: renderSup,
         fichiers: renderFichiers, escorte: renderEscorte,
-        'reporting-env': renderReportingEnv
+        'reporting-env': renderReportingEnv,
+        audit: renderAuditLogs
     };
     renderers[n]?.();
 }
@@ -853,26 +861,201 @@ window.printRenv = () => {
     const date = document.getElementById('renv-date').value;
     const red = D.operators.find(o => o.id === renvCurrent.redacteur_id);
     const lignes = collectRenvLignes();
-    const rows = lignes.map((l, i) => `
-        <tr>
-            <td style="text-align:center;padding:8px;border:1px solid #ccc;font-weight:bold">${i+1}</td>
-            <td style="padding:8px;border:1px solid #ccc;font-size:11px">${l.activite}</td>
-            <td style="padding:8px;border:1px solid #ccc;font-size:11px">${l.constats||''}</td>
-            <td style="padding:8px;border:1px solid #ccc;font-size:11px;text-align:center">${(l.zones||[]).join(', ')||''}</td>
-            <td style="padding:8px;border:1px solid #ccc;font-size:11px">${l.commentaires||''}</td>
-        </tr>`).join('');
+    const rows = lignes.map((l, i) => {
+        const zonesHtml = (l.zones||[]).length
+            ? (l.zones).map(z => `<span class="zone-yes">${z}</span>`).join('')
+            : '<span style="color:#aaa;font-style:italic">—</span>';
+        return `<tr>
+            <td class="num">${i+1}</td>
+            <td class="act">${l.activite}</td>
+            <td style="padding:7px;border:1px solid #c8d4e0">${l.constats||'<span style="color:#aaa;font-style:italic">Néant</span>'}</td>
+            <td style="padding:7px;border:1px solid #c8d4e0;text-align:center">${zonesHtml}</td>
+            <td style="padding:7px;border:1px solid #c8d4e0">${l.commentaires||''}</td>
+        </tr>`;
+    }).join('');
+    const logoEl = document.querySelector('#login-overlay img');
+    const logoSrc = logoEl ? logoEl.src : '';
+    const now = new Date();
+    const printDate = now.toLocaleDateString('fr-FR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
+    const printTime = now.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
     const w = window.open('', '_blank');
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reporting Env. - ${date}</title>
-    <style>body{font-family:Arial,sans-serif;margin:20px;font-size:12px}h2{text-align:center}table{width:100%;border-collapse:collapse}th{background:#f0f0f0;padding:8px;border:1px solid #ccc;font-size:11px}</style></head><body>
-    <h2>Formulaire de reporting journalier</h2>
-    <p><strong>Jour du :</strong> ${fmt(date)} &nbsp;&nbsp; <strong>Équipe :</strong> ${renvCurrent.equipe} &nbsp;&nbsp; <strong>Rédacteur :</strong> ${red ? red.grade+' '+red.nom+' '+red.prenom : '—'}</p>
-    <table><thead><tr><th>N°</th><th>Activités de surveillance</th><th>Constats (à décrire)</th><th>Zone de constat</th><th>Commentaires</th></tr></thead><tbody>${rows}</tbody></table>
-    <p style="margin-top:16px;font-size:10px;font-style:italic"><strong>NB :</strong> Décrire les constats en précisant la nature, la période d'observation, la localisation, l'étendue.</p>
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Reporting Env. — ${fmt(date)}</title>
+    <style>
+      @page { size: A4 landscape; margin: 15mm 12mm; }
+      * { box-sizing: border-box; }
+      body { font-family: 'Arial', sans-serif; font-size: 11px; color: #1a2a3a; margin: 0; }
+      .header { display:flex; align-items:center; gap: 16px; padding-bottom: 10px; border-bottom: 3px solid #1f3052; margin-bottom: 12px; }
+      .header img { width: 60px; height: 60px; }
+      .header-org { flex: 1; }
+      .header-org .org-main { font-size:16px; font-weight:700; color:#1f3052; letter-spacing:.5px; }
+      .header-org .org-sub  { font-size:10px; color:#5a7090; letter-spacing:1px; margin-top:2px; }
+      .header-doc { text-align:right; }
+      .header-doc .doc-title { font-size:13px; font-weight:700; color:#1f3052; }
+      .header-doc .doc-meta  { font-size:9px; color:#6a7a8a; margin-top:3px; }
+      .meta-band { background:#1f3052; color:white; padding:7px 12px; border-radius:4px; margin-bottom:12px;
+        display:flex; gap:24px; font-size:11px; }
+      .meta-band span { opacity:.8; }
+      .meta-band strong { opacity:1; }
+      table { width:100%; border-collapse:collapse; }
+      thead tr { background:#1f3052; color:white; }
+      th { padding:8px 7px; font-size:10px; letter-spacing:.5px; text-transform:uppercase; border:1px solid #2a4060; }
+      td { padding:7px; border:1px solid #c8d4e0; vertical-align:top; font-size:10.5px; }
+      tr:nth-child(even) td { background:#f4f7fb; }
+      .num { text-align:center; font-weight:700; color:#1f3052; font-size:13px; width:30px; }
+      .act { font-weight:600; color:#1f3052; width:200px; }
+      .zones { font-size:10px; }
+      .zone-yes { background:#dceeff; color:#1a5fa8; border-radius:3px; padding:2px 5px; margin:2px; display:inline-block; font-weight:700; }
+      .footer { margin-top:12px; padding-top:8px; border-top:1px solid #c8d4e0; display:flex; justify-content:space-between; font-size:9px; color:#8a9aaa; }
+      .nb-note { margin-top:10px; font-size:9.5px; font-style:italic; color:#5a6a7a; background:#f0f4f8; padding:6px 10px; border-left:3px solid #1f3052; }
+    </style></head><body>
+    <div class="header">
+      ${logoSrc ? `<img src="${logoSrc}" alt="JOCC">` : ''}
+      <div class="header-org">
+        <div class="org-main">PRÉFECTURE MARITIME — JOCC BÉNIN</div>
+        <div class="org-sub">JOINT OPERATIONS COMMAND CENTER · Gestion des Quarts</div>
+      </div>
+      <div class="header-doc">
+        <div class="doc-title">FORMULAIRE DE REPORTING JOURNALIER</div>
+        <div class="doc-meta">Surveillance environnementale et maritime<br>Imprimé le ${printDate} à ${printTime}</div>
+      </div>
+    </div>
+    <div class="meta-band">
+      <div><span>Jour du : </span><strong>${fmt(date)}</strong></div>
+      <div><span>Équipe de quart : </span><strong>Équipe ${renvCurrent.equipe}</strong></div>
+      <div><span>Rédacteur : </span><strong>${red ? red.grade+' '+red.nom+' '+red.prenom : '—'}</strong></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:30px">N°</th>
+        <th style="width:200px">Activités de surveillance</th>
+        <th>Constats (à décrire)</th>
+        <th style="width:160px;text-align:center">Zone de constat</th>
+        <th style="width:160px">Commentaires</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="nb-note"><strong>NB :</strong> Décrire les constats en précisant la nature, la période d'observation, la localisation, l'étendue.</div>
+    <div class="footer">
+      <span>PRÉFECTURE MARITIME — JOCC BÉNIN — Document généré automatiquement</span>
+      <span>Rapport du ${fmt(date)} · Équipe ${renvCurrent.equipe}</span>
+    </div>
     <script>window.print();<\/script></body></html>`);
     w.document.close();
 };
 
 function renderReportingEnv() { loadRenvHist(); }
+
+// ── AUDIT LOGS ─────────────────────────────────────────────────────────
+const ACTION_STYLE = {
+  'LOGIN':        { bg:'rgba(39,174,96,.15)',  color:'#27ae60',  icon:'🔑' },
+  'LOGIN_REFUSE': { bg:'rgba(231,76,60,.15)',  color:'#e74c3c',  icon:'🚫' },
+  'LOGIN_ECHEC':  { bg:'rgba(231,76,60,.15)',  color:'#e74c3c',  icon:'⚠️' },
+  'DELETE':       { bg:'rgba(231,76,60,.1)',   color:'#e74c3c',  icon:'🗑' },
+  'POST':         { bg:'rgba(52,152,219,.1)',  color:'#3498db',  icon:'➕' },
+  'PUT':          { bg:'rgba(200,164,74,.1)',  color:'rgba(200,164,74,.9)', icon:'✏️' },
+  'PATCH':        { bg:'rgba(200,164,74,.08)', color:'rgba(200,164,74,.7)', icon:'🔧' },
+};
+function auditStyle(action) {
+  for (const [k,v] of Object.entries(ACTION_STYLE)) {
+    if (action.startsWith(k)) return v;
+  }
+  return { bg:'rgba(255,255,255,.04)', color:'var(--color-text-secondary)', icon:'📋' };
+}
+
+let _auditData = [];
+
+async function loadAuditLogs() {
+    const userId  = document.getElementById('audit-flt-user')?.value   || '';
+    const action  = document.getElementById('audit-flt-action')?.value || '';
+    const from    = document.getElementById('audit-flt-from')?.value   || '';
+    const to      = document.getElementById('audit-flt-to')?.value     || '';
+    const limit   = document.getElementById('audit-flt-limit')?.value  || 200;
+    const params  = new URLSearchParams();
+    if (userId) params.set('user_id', userId);
+    if (action) params.set('action', action);
+    if (from)   params.set('from', from);
+    if (to)     params.set('to', to);
+    params.set('limit', limit);
+    try {
+        _auditData = await api('/audit-logs?' + params.toString());
+        renderAuditTable(_auditData);
+    } catch(e) { console.error(e); }
+}
+
+function renderAuditTable(logs) {
+    const tbody = document.getElementById('audit-body');
+    const stats = document.getElementById('audit-stats');
+    if (!tbody) return;
+    if (stats) {
+        stats.style.display = '';
+        document.getElementById('audit-count').textContent   = logs.length;
+        document.getElementById('audit-logins').textContent  = logs.filter(l => l.action === 'LOGIN').length;
+        document.getElementById('audit-refused').textContent = logs.filter(l => l.action.includes('REFUSE') || l.action.includes('ECHEC')).length;
+        document.getElementById('audit-users').textContent   = new Set(logs.filter(l => l.user_id).map(l => l.user_id)).size;
+    }
+    if (!logs.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">Aucun log trouvé.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = logs.map(l => {
+        const s = auditStyle(l.action);
+        const dt = new Date(l.created_at);
+        const dateStr = dt.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+        const timeStr = dt.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+        const details = l.details ? l.details.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '—';
+        return `<tr>
+            <td style="font-size:11px;white-space:nowrap"><div>${dateStr}</div><div style="opacity:.6">${timeStr}</div></td>
+            <td><div style="font-weight:600;font-size:11.5px">${l.user_nom || '—'}</div><div style="font-size:10px;opacity:.6">${l.user_id || ''}</div></td>
+            <td><span class="badge ${l.user_poste==='supervision'?'bsup':l.user_poste==='chef'?'bi':'bw'}" style="font-size:10px">${POSTES[l.user_poste]||l.user_poste||'—'}</span></td>
+            <td><span style="display:inline-flex;align-items:center;gap:4px;background:${s.bg};color:${s.color};padding:3px 7px;border-radius:4px;font-size:10.5px;font-weight:600">
+                ${s.icon} ${l.action}
+            </span></td>
+            <td style="font-size:10.5px;opacity:.8">${l.resource || '—'}</td>
+            <td style="font-size:10.5px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${details}">${details}</td>
+            <td style="font-size:10px;opacity:.6">${l.ip || '—'}</td>
+        </tr>`;
+    }).join('');
+}
+
+window.exportAuditCSV = () => {
+    if (!_auditData.length) { alert('Aucune donnée à exporter. Lancez une recherche d\'abord.'); return; }
+    const cols = ['Date','Opérateur','ID','Rôle','Action','Ressource','Détails','IP'];
+    const rows = _auditData.map(l => [
+        new Date(l.created_at).toLocaleString('fr-FR'),
+        l.user_nom||'', l.user_id||'', POSTES[l.user_poste]||l.user_poste||'',
+        l.action, l.resource||'', l.details||'', l.ip||''
+    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
+    const csv = '\uFEFF' + cols.map(c=>`"${c}"`).join(',') + '\n' + rows.join('\n');
+    const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = `audit_jocc_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+};
+
+window.clearAuditLogs = async () => {
+    const choice = confirm('Purger TOUS les logs d\'audit ? Cette action est irréversible.');
+    if (!choice) return;
+    try {
+        await api('/audit-logs', { method: 'DELETE', body: JSON.stringify({}) });
+        _auditData = [];
+        renderAuditTable([]);
+        alert('Journal d\'audit purgé.');
+    } catch(e) { alert(e.message); }
+};
+
+function renderAuditLogs() {
+    // Populate user filter
+    const sel = document.getElementById('audit-flt-user');
+    if (sel && sel.options.length <= 1) {
+        D.operators.sort((a,b)=>a.nom.localeCompare(b.nom)).forEach(o => {
+            sel.innerHTML += `<option value="${o.id}">${o.grade} ${o.nom} ${o.prenom}</option>`;
+        });
+    }
+    loadAuditLogs();
+}
 
 // ── INITIALISATION ET EVENT LISTENERS ─────────────────────────────────
 window.doLogin = async () => {
@@ -974,6 +1157,8 @@ window.addEventListener('DOMContentLoaded', async () => {
         ['btn-load-renv', loadRenv],
         ['btn-save-renv', saveRenv],
         ['btn-del-renv', delRenv],
+        // Audit
+        ['btn-load-audit', loadAuditLogs],
     ];
 
     binders.forEach(([id, fn]) => {

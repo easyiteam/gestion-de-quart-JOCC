@@ -168,6 +168,21 @@ CREATE OR REPLACE TRIGGER trg_reporting_env_upd
   BEFORE UPDATE ON reporting_env FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE INDEX IF NOT EXISTS idx_rep_env_date ON reporting_env(date DESC);
 
+-- ─── JOURNAL D'AUDIT ───────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id         VARCHAR(30) PRIMARY KEY,
+  user_id    VARCHAR(30),
+  user_nom   VARCHAR(150),
+  user_poste VARCHAR(30),
+  action     VARCHAR(150) NOT NULL,
+  resource   VARCHAR(100),
+  details    TEXT,
+  ip         VARCHAR(50),
+  created_at TIMESTAMPTZ  DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_user    ON audit_logs(user_id);
+
 -- ─── CAPTURES SURVEILLANCE ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS captures (
   id         VARCHAR(30) PRIMARY KEY,

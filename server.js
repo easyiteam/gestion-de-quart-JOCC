@@ -74,6 +74,43 @@ const ok  = (res, data)          => res.json({ success: true, data });
 const err = (res, msg, code=500) => res.status(code).json({ success: false, error: msg });
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
+// ─── AUDIT LOG ────────────────────────────────────────────────────────────
+function audit(userId, userNom, userPoste, action, resource, details, ip) {
+  pool.query(
+    `INSERT INTO audit_logs (id,user_id,user_nom,user_poste,action,resource,details,ip)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [genId(), userId, userNom, userPoste, action, resource || null,
+     details ? String(details).slice(0, 400) : null, ip || '']
+  ).catch(() => {});
+}
+
+// Middleware: log auto toutes les mutations réussies (POST/PUT/PATCH/DELETE)
+app.use((req, res, next) => {
+  const MUTATE = ['POST','PUT','PATCH','DELETE'];
+  if (!MUTATE.includes(req.method)) return next();
+  const origJson = res.json.bind(res);
+  res.json = function(body) {
+    if (body && body.success && req.user) {
+      const safeBody = JSON.stringify(req.body || {})
+        .replace(/"(password[^"]*|newPassword|currentPassword)"\s*:\s*"[^"]+"/g, '"$1":"***"')
+        .slice(0, 400);
+      audit(req.user.id, `${req.user.nom} ${req.user.prenom}`, req.user.poste,
+            `${req.method} ${req.path}`, req.path, safeBody, req.ip);
+    }
+    return origJson(body);
+  };
+  next();
+});
+
+// ─── ROTATION HELPER ──────────────────────────────────────────────────────
+function getTeamForDate(date, refDate, refTeam) {
+  const TEAMS = ['A','B','C','D'];
+  const ref  = new Date(refDate + 'T12:00:00');
+  const d    = new Date(date    + 'T12:00:00');
+  const diff = Math.round((d - ref) / 86400000);
+  return TEAMS[((TEAMS.indexOf(refTeam) + diff) % 4 + 4) % 4];
+}
+
 // ─── AUTH MIDDLEWARE ──────────────────────────────────────────────────────
 const requireAuth = (req, res, next) => {
   const auth = req.headers['authorization'];
@@ -110,6 +147,25 @@ async function applyMigrations() {
     if (!cc.rows.length) {
       await pool.query('ALTER TABLE operateurs ADD CONSTRAINT unique_oper_name UNIQUE (nom, prenom)');
     }
+
+    // Rôle "liaison" — mise à jour de la contrainte CHECK
+    await pool.query(`ALTER TABLE operateurs DROP CONSTRAINT IF EXISTS operateurs_poste_check`);
+    await pool.query(`ALTER TABLE operateurs ADD CONSTRAINT operateurs_poste_check
+      CHECK (poste IN ('chef','veille','radio','permanence','supervision','liaison'))`);
+
+    // Table audit_logs
+    await pool.query(`CREATE TABLE IF NOT EXISTS audit_logs (
+      id         VARCHAR(30) PRIMARY KEY,
+      user_id    VARCHAR(30),
+      user_nom   VARCHAR(150),
+      user_poste VARCHAR(30),
+      action     VARCHAR(150) NOT NULL,
+      resource   VARCHAR(100),
+      details    TEXT,
+      ip         VARCHAR(50),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC)`);
 
     // Table reporting_env
     await pool.query(`
@@ -189,9 +245,32 @@ app.post('/api/login', async (req, res) => {
     const op = r.rows[0];
     if (!op.password_hash) return err(res, 'Compte non configuré, contactez un superviseur', 401);
     const valid = await bcrypt.compare(password, op.password_hash);
-    if (!valid) return err(res, 'Identifiant ou mot de passe incorrect', 401);
+    if (!valid) {
+      audit(op.id, `${op.nom} ${op.prenom}`, op.poste, 'LOGIN_ECHEC', 'auth', 'Mot de passe incorrect', req.ip);
+      return err(res, 'Identifiant ou mot de passe incorrect', 401);
+    }
+
+    // ── Vérification de planification (rôles non-exempt uniquement) ──
+    const EXEMPT_ROLES = ['supervision', 'chef'];
+    if (!EXEMPT_ROLES.includes(op.poste)) {
+      const cfg = await pool.query("SELECT value FROM config WHERE key='rotation'");
+      if (cfg.rows.length) {
+        const { refDate, refTeam } = cfg.rows[0].value;
+        const today = new Date().toISOString().slice(0, 10);
+        const todayTeam = getTeamForDate(today, refDate, refTeam);
+        if (op.equipe !== todayTeam) {
+          audit(op.id, `${op.nom} ${op.prenom}`, op.poste, 'LOGIN_REFUSE', 'auth',
+            `Non planifié — Équipe du jour : ${todayTeam}`, req.ip);
+          return err(res,
+            `Connexion refusée : vous n'êtes pas planifié aujourd'hui.\n` +
+            `Équipe de quart en service : Équipe ${todayTeam}`, 403);
+        }
+      }
+    }
+
     const payload = { id: op.id, nom: op.nom, prenom: op.prenom, grade: op.grade, equipe: op.equipe, poste: op.poste };
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+    audit(op.id, `${op.nom} ${op.prenom}`, op.poste, 'LOGIN', 'auth', null, req.ip);
     ok(res, { token, user: payload });
   } catch (e) { err(res, e.message); }
 });
@@ -719,6 +798,38 @@ app.delete('/api/reporting-env/:id', requireRole('supervision'), async (req, res
     const r = await pool.query('DELETE FROM reporting_env WHERE id=$1 RETURNING id', [req.params.id]);
     if (!r.rows.length) return err(res, 'Rapport introuvable', 404);
     ok(res, { deleted: req.params.id });
+  } catch (e) { err(res, e.message); }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// API AUDIT LOGS
+// ═══════════════════════════════════════════════════════════════
+
+app.get('/api/audit-logs', requireRole('supervision'), async (req, res) => {
+  try {
+    const { user_id, action, from, to, limit = 200 } = req.query;
+    let sql = 'SELECT * FROM audit_logs WHERE 1=1';
+    const params = [];
+    if (user_id) { params.push(user_id); sql += ` AND user_id=$${params.length}`; }
+    if (action)  { params.push(`%${action}%`); sql += ` AND action ILIKE $${params.length}`; }
+    if (from)    { params.push(from); sql += ` AND created_at >= $${params.length}`; }
+    if (to)      { params.push(to + 'T23:59:59Z'); sql += ` AND created_at <= $${params.length}`; }
+    sql += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`;
+    params.push(Math.min(Number(limit) || 200, 1000));
+    const r = await pool.query(sql, params);
+    ok(res, r.rows);
+  } catch (e) { err(res, e.message); }
+});
+
+app.delete('/api/audit-logs', requireRole('supervision'), async (req, res) => {
+  try {
+    const { before } = req.body;
+    if (before) {
+      await pool.query('DELETE FROM audit_logs WHERE created_at < $1', [before]);
+    } else {
+      await pool.query('DELETE FROM audit_logs');
+    }
+    ok(res, { deleted: true });
   } catch (e) { err(res, e.message); }
 });
 
