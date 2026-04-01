@@ -723,29 +723,58 @@ async function loadRenv() {
     } catch(e) { alert(e.message); }
 }
 
+const RENV_TA = `width:100%;box-sizing:border-box;resize:vertical;min-height:70px;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:5px;
+  color:inherit;font-size:11.5px;padding:8px;font-family:inherit;line-height:1.5;outline:none;
+  transition:border-color .2s`;
+const RENV_CELL = (extra='') =>
+  `padding:10px;border-right:1px solid rgba(255,255,255,.08);border-bottom:1px solid rgba(255,255,255,.08);vertical-align:top;${extra}`;
+
 function renderRenvForm(lignes) {
     const tbody = document.getElementById('renv-tbody');
     tbody.innerHTML = '';
     RENV_ACTIVITES.forEach((act, i) => {
         const lg = lignes.find(l => l.num === i + 1) || { num: i+1, activite: act, constats: '', zones: [], commentaires: '' };
-        const zonesHtml = RENV_ZONES.map(z =>
-            `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;white-space:nowrap">
-              <input type="checkbox" data-renv-zone="${i+1}|${z}" ${(lg.zones||[]).includes(z)?'checked':''}> ${z}
-             </label>`
-        ).join('');
-        const even = i % 2 === 1 ? 'background:rgba(255,255,255,.02)' : '';
-        tbody.innerHTML += `<tr style="${even}">
-            <td style="text-align:center;padding:8px;border-bottom:1px solid var(--color-border);vertical-align:top;font-weight:700;color:rgba(200,164,74,.9)">${i+1}</td>
-            <td style="padding:8px;border-bottom:1px solid var(--color-border);vertical-align:top;font-size:11px;line-height:1.4">${act}</td>
-            <td style="padding:6px;border-bottom:1px solid var(--color-border);vertical-align:top">
-              <textarea data-renv-constats="${i+1}" rows="2" style="width:100%;resize:vertical;background:transparent;border:1px solid var(--color-border);border-radius:4px;color:inherit;font-size:11px;padding:5px;font-family:inherit">${lg.constats||''}</textarea>
-            </td>
-            <td style="padding:8px;border-bottom:1px solid var(--color-border);vertical-align:top">
-              <div style="display:flex;flex-direction:column;gap:5px">${zonesHtml}</div>
-            </td>
-            <td style="padding:6px;border-bottom:1px solid var(--color-border);vertical-align:top">
-              <textarea data-renv-comments="${i+1}" rows="2" style="width:100%;resize:vertical;background:transparent;border:1px solid var(--color-border);border-radius:4px;color:inherit;font-size:11px;padding:5px;font-family:inherit">${lg.commentaires||''}</textarea>
-            </td>
+        const activeZones = lg.zones || [];
+        const isLast = i === RENV_ACTIVITES.length - 1;
+        const bBot = isLast ? 'border-bottom:none' : '';
+
+        // 2×2 zone grid
+        const zonesHtml = `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px">
+            ${RENV_ZONES.map(z => {
+              const checked = activeZones.includes(z) ? 'checked' : '';
+              const isActive = activeZones.includes(z);
+              return `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:5px 7px;border-radius:5px;
+                background:${isActive ? 'rgba(200,164,74,.15)' : 'rgba(255,255,255,.03)'};
+                border:1px solid ${isActive ? 'rgba(200,164,74,.5)' : 'rgba(255,255,255,.08)'};
+                font-size:11px;white-space:nowrap;transition:all .15s"
+                onmouseenter="this.style.background='rgba(255,255,255,.07)'"
+                onmouseleave="this.style.background='${isActive ? 'rgba(200,164,74,.15)' : 'rgba(255,255,255,.03)'}'">
+                <input type="checkbox" data-renv-zone="${i+1}|${z}" ${checked}
+                  style="accent-color:rgba(200,164,74,.9);width:14px;height:14px;cursor:pointer"> ${z}
+              </label>`;
+            }).join('')}
+          </div>`;
+
+        const rowBg = i % 2 === 0 ? 'background:rgba(255,255,255,.015)' : 'background:rgba(0,0,0,.1)';
+        tbody.innerHTML += `
+        <tr style="${rowBg}">
+          <td style="${RENV_CELL('text-align:center;width:36px;')}${bBot}">
+            <div style="font-size:16px;font-weight:700;color:rgba(200,164,74,.85);line-height:1">${i+1}</div>
+          </td>
+          <td style="${RENV_CELL('width:220px;')}${bBot}">
+            <div style="font-size:11.5px;font-weight:600;line-height:1.45;color:var(--color-text-primary)">${act}</div>
+          </td>
+          <td style="${RENV_CELL()}${bBot}">
+            <textarea data-renv-constats="${i+1}" style="${RENV_TA}" placeholder="Décrire le constat observé…" onfocus="this.style.borderColor='rgba(200,164,74,.6)'" onblur="this.style.borderColor='rgba(255,255,255,.15)'">${lg.constats||''}</textarea>
+          </td>
+          <td style="${RENV_CELL('width:190px;')}${bBot}">
+            ${zonesHtml}
+          </td>
+          <td style="padding:10px;vertical-align:top;${bBot}">
+            <textarea data-renv-comments="${i+1}" style="${RENV_TA}" placeholder="Observations complémentaires…" onfocus="this.style.borderColor='rgba(200,164,74,.6)'" onblur="this.style.borderColor='rgba(255,255,255,.15)'">${lg.commentaires||''}</textarea>
+          </td>
         </tr>`;
     });
 }
