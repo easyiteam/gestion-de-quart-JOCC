@@ -12,7 +12,9 @@ const PRIO_C = { normal: 'bi', important: 'bw', urgent: 'br' };
 const PRIO_L = { normal: 'Normale', important: 'Importante', urgent: 'Urgente' };
 const SRCS = { vtmis: 'VTMIS', ais: 'AIS', radar: 'Radar', camera: 'Caméra', autre: 'Autre' };
 
-let D = { config: { refDate: '2026-01-01', refTeam: 'A' }, operators: [], sitreps: [], absences: [], notifications: [], consignes: [], captures: [], escortes: [], rapports: {} };
+let D = { config: { refDate: '2026-01-01', refTeam: 'A' }, operators: [], sitreps: [], absences: [], notifications: [], consignes: [], captures: [], escortes: [], rapports: {}, escales: [], etaWapco: [] };
+let _esc2DocFD = null; // { name, data } pour le doc d'autorisation escale
+let _wapDocFD  = null; // idem pour ETA WAPCO
 let calY = new Date().getFullYear(), calM = new Date().getMonth(), curRptDate = null, survFD = null, csFD = null;
 
 // ── UTILS ─────────────────────────────────────────────────────────────
@@ -97,12 +99,14 @@ async function api(path, options = {}) {
 // ── DATA LOADING ─────────────────────────────────────────────────────
 async function load() {
     try {
-        const [cfg, ops, sits, abs, notifs, cs, caps, escs] = await Promise.all([
+        const [cfg, ops, sits, abs, notifs, cs, caps, escs, escales, wapco] = await Promise.all([
             api('/config'), api('/operateurs'), api('/sitreps'), api('/absences'),
-            api('/notifications'), api('/consignes'), api('/captures'), api('/escortes')
+            api('/notifications'), api('/consignes'), api('/captures'), api('/escortes'),
+            api('/escales'), api('/eta-wapco')
         ]);
         D.config = cfg; D.operators = ops; D.sitreps = sits; D.absences = abs;
         D.notifications = notifs; D.consignes = cs; D.captures = caps; D.escortes = escs;
+        D.escales = escales; D.etaWapco = wapco;
         updDot();
     } catch (e) { console.error('Load error:', e); }
 }
@@ -146,7 +150,9 @@ async function showTab(n) {
         operators: renderOps, absences: renderAbs, supervision: renderSup,
         fichiers: renderFichiers, escorte: renderEscorte,
         'reporting-env': renderReportingEnv,
-        audit: renderAuditLogs
+        audit: renderAuditLogs,
+        escales: renderEscales,
+        'eta-wapco': renderEtaWapco
     };
     renderers[n]?.();
 }
@@ -833,18 +839,32 @@ async function loadRenvHist() {
         if (cnt) cnt.textContent = `${list.length} rapport(s)`;
         if (!list.length) { hist.innerHTML = '<div class="empty">Aucun rapport enregistré.</div>'; return; }
         hist.innerHTML = list.map(r => {
+            // r.date est une string 'YYYY-MM-DD' grâce au parser pg côté serveur
+            const dateStr = (r.date || '').slice(0, 10);
             const red = D.operators.find(o => o.id === r.redacteur_id);
             const lignesRens = (r.lignes||[]).filter(l => l.constats || (l.zones||[]).length).length;
-            return `<div class="ev-item" style="cursor:pointer" onclick="loadRenvFromHist('${r.date}')">
-                <div class="flex-b">
-                    <strong>${fmt(r.date)}</strong>
-                    <div class="flex" style="gap:6px">
-                        ${tBadge(r.equipe)}
-                        <span class="badge ${lignesRens?'bv':'bi'}">${lignesRens}/5 activité(s)</span>
+            const updatedAt = r.updated_at || r.created_at;
+            const heureMaj = updatedAt ? new Date(updatedAt).toLocaleString('fr-FR', {
+                day:'2-digit', month:'2-digit', year:'numeric',
+                hour:'2-digit', minute:'2-digit'
+            }) : '';
+            return `<div class="ev-item">
+                <div class="flex-b" style="align-items:flex-start">
+                    <div>
+                        <div style="font-weight:700;font-size:13px;margin-bottom:3px">${fmt(dateStr)}</div>
+                        <div style="font-size:11px;color:var(--color-text-secondary)">
+                            Rédacteur : ${red ? red.grade+' '+red.nom+' '+red.prenom : '—'}
+                            ${heureMaj ? `<span style="margin-left:10px;opacity:.6">· Màj. ${heureMaj}</span>` : ''}
+                        </div>
                     </div>
-                </div>
-                <div style="font-size:11px;color:var(--color-text-secondary);margin-top:3px">
-                    Rédacteur : ${red ? red.grade+' '+red.nom : '—'}
+                    <div class="flex" style="gap:6px;align-items:center;flex-shrink:0">
+                        ${tBadge(r.equipe)}
+                        <span class="badge ${lignesRens ? 'bv' : 'bi'}">${lignesRens}/5 activité(s)</span>
+                        <button class="btn btn-info" style="padding:3px 10px;font-size:11px"
+                            onclick="loadRenvFromHist('${dateStr}')">📂 Charger</button>
+                        ${can('manage_operators') ? `<button class="btn br" style="padding:3px 8px;font-size:11px"
+                            onclick="delRenvById('${r.id}','${dateStr}')">✕</button>` : ''}
+                    </div>
                 </div>
             </div>`;
         }).join('');
@@ -852,8 +872,27 @@ async function loadRenvHist() {
 }
 
 window.loadRenvFromHist = (date) => {
-    document.getElementById('renv-date').value = date;
+    const dateStr = date.slice(0, 10);
+    document.getElementById('renv-date').value = dateStr;
+    // Scroll vers le formulaire
+    document.getElementById('renv-form-wrap').scrollIntoView?.({ behavior: 'smooth' });
     loadRenv();
+};
+
+window.delRenvById = async (id, dateStr) => {
+    if (!confirm(`Supprimer le rapport du ${fmt(dateStr)} ?`)) return;
+    try {
+        await api('/reporting-env/' + id, { method: 'DELETE' });
+        // Si c'est le rapport actuellement chargé, fermer le formulaire
+        if (renvCurrent && renvCurrent.id === id) {
+            renvCurrent = null;
+            document.getElementById('renv-form-wrap').style.display = 'none';
+            document.getElementById('btn-save-renv').style.display = 'none';
+            document.getElementById('btn-print-renv').style.display = 'none';
+            document.getElementById('btn-del-renv').style.display = 'none';
+        }
+        await loadRenvHist();
+    } catch(e) { alert(e.message); }
 };
 
 window.printRenv = () => {
@@ -1189,4 +1228,972 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Pré-sélectionner l'équipe du jour
     const renvEqEl = document.getElementById('renv-equipe');
     if(renvEqEl) renvEqEl.value = getTeam(tod());
+
+    // ── Escales bindings ──────────────────────────────────────────
+    document.getElementById('btn-new-escale')?.addEventListener('click', () => openEscaleForm(true));
+    document.getElementById('escale-cancel')?.addEventListener('click', () => document.getElementById('escale-form').style.display='none');
+    document.getElementById('escale-cancel2')?.addEventListener('click', () => document.getElementById('escale-form').style.display='none');
+    document.getElementById('esc2-save')?.addEventListener('click', saveEscale);
+    ['esl-flt-st','esl-flt-from','esl-flt-to'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', renderEscales);
+    });
+
+    // ── ETA WAPCO bindings ────────────────────────────────────────
+    document.getElementById('btn-new-wapco')?.addEventListener('click', () => openWapcoForm(true));
+    document.getElementById('wapco-cancel')?.addEventListener('click', () => document.getElementById('wapco-form').style.display='none');
+    document.getElementById('wapco-cancel2')?.addEventListener('click', () => document.getElementById('wapco-form').style.display='none');
+    document.getElementById('wap-save')?.addEventListener('click', saveWapco);
+    ['wap-flt-st','wap-flt-from','wap-flt-to'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', renderEtaWapco);
+    });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// ESCALES — Navires de guerre en escale
+// ═══════════════════════════════════════════════════════════════
+
+// ── Lecture fichier → base64 data URL ────────────────────────────────────
+function readFileAsDataURL(file) {
+    return new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = e => res(e.target.result);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+    });
+}
+
+// Construit le HTML de preview selon le type MIME
+function buildDocPreviewHTML(dataUrl, fileName) {
+    const ext = (fileName || '').split('.').pop().toLowerCase();
+    const isImage = ['png','jpg','jpeg','gif','bmp','webp'].includes(ext);
+    const isPdf   = ext === 'pdf';
+    if (isImage) {
+        return `<img src="${dataUrl}" alt="${fileName}"
+            style="max-width:100%;max-height:340px;display:block;object-fit:contain;padding:8px">`;
+    }
+    if (isPdf) {
+        return `<iframe src="${dataUrl}" style="width:100%;height:420px;border:none;display:block"
+            title="${fileName}"></iframe>`;
+    }
+    // Word / autre — pas de preview natif dans le navigateur
+    const icon = ext === 'doc' || ext === 'docx' ? '📝' : '📄';
+    return `<div style="display:flex;align-items:center;gap:12px;padding:16px">
+        <span style="font-size:36px">${icon}</span>
+        <div>
+            <div style="font-weight:600;font-size:13px">${fileName}</div>
+            <div style="font-size:11px;color:var(--color-text-secondary);margin-top:3px">
+                Aperçu non disponible pour ce type de fichier.
+            </div>
+            <a href="${dataUrl}" download="${fileName}"
+               style="display:inline-block;margin-top:8px;font-size:11px;color:rgba(200,164,74,.9)">
+               ⬇ Télécharger pour ouvrir
+            </a>
+        </div>
+    </div>`;
+}
+
+function showDocViewer(viewerId, previewId, dataUrl, fileName) {
+    const viewer  = document.getElementById(viewerId);
+    const preview = document.getElementById(previewId);
+    if (!viewer) return;
+    viewer.innerHTML = buildDocPreviewHTML(dataUrl, fileName);
+    viewer.style.display = 'block';
+    if (preview) preview.textContent = '📄 ' + fileName;
+}
+
+function hideDocViewer(viewerId, previewId) {
+    const viewer = document.getElementById(viewerId);
+    if (viewer) { viewer.innerHTML = ''; viewer.style.display = 'none'; }
+    const preview = document.getElementById(previewId);
+    if (preview) preview.textContent = '';
+}
+
+window.onEsc2DocChange = async function(input) {
+    const file = input.files[0]; if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { alert('Fichier trop volumineux (max 10 Mo).'); input.value = ''; return; }
+    const data = await readFileAsDataURL(file);
+    _esc2DocFD = { name: file.name, data };
+    showDocViewer('esc2-doc-viewer', 'esc2-doc-preview', data, file.name);
+    // Masquer le doc existant si on remplace
+    document.getElementById('esc2-doc-existing').style.display = 'none';
+};
+
+window.onWapDocChange = async function(input) {
+    const file = input.files[0]; if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { alert('Fichier trop volumineux (max 10 Mo).'); input.value = ''; return; }
+    const data = await readFileAsDataURL(file);
+    _wapDocFD = { name: file.name, data };
+    showDocViewer('wap-doc-viewer', 'wap-doc-preview', data, file.name);
+    document.getElementById('wap-doc-existing').style.display = 'none';
+};
+
+// Télécharge le doc depuis le data URL stocké dans le lien
+window.dlDoc = function(a, type) {
+    a.preventDefault();
+    const data = a.dataset.docData;
+    const name = a.dataset.docNom || 'document';
+    if (!data) return;
+    const link = document.createElement('a');
+    link.href = data; link.download = name;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+};
+
+// Supprime le doc existant (marqué pour suppression côté form)
+window.clearDoc = function(prefix) {
+    if (prefix === 'esc2') {
+        _esc2DocFD = { name: null, data: '__clear__' };
+        document.getElementById('esc2-doc-existing').style.display = 'none';
+        hideDocViewer('esc2-doc-viewer', 'esc2-doc-preview');
+        document.getElementById('esc2-doc-preview').textContent = '(document supprimé)';
+    } else {
+        _wapDocFD = { name: null, data: '__clear__' };
+        document.getElementById('wap-doc-existing').style.display = 'none';
+        hideDocViewer('wap-doc-viewer', 'wap-doc-preview');
+        document.getElementById('wap-doc-preview').textContent = '(document supprimé)';
+    }
+};
+
+const ESC2_TYPE_L = {
+    fregate:'Frégate', patrouilleur:'Patrouilleur', corvette:'Corvette',
+    sous_marin:'Sous-marin', porte_helicopteres:'Porte-hélicoptères',
+    aviso:'Aviso', batiment_soutien:'Bât. de soutien', autre:'Autre'
+};
+const ESC2_MOTIF_L = {
+    visite_protocolaire:'Visite protocolaire', ravitaillement:'Ravitaillement',
+    maintenance:'Maintenance', exercice:'Exercice conjoint',
+    transit:'Transit', humanitaire:'Humanitaire', autre:'Autre'
+};
+const ESC2_STATUT_C = { attendu:'bw', a_quai:'bv', appareille:'bi', annule:'br' };
+const ESC2_STATUT_L = { attendu:'Attendu', a_quai:'À quai', appareille:'Appareillé', annule:'Annulé' };
+
+function openEscaleForm(isNew, data) {
+    _esc2DocFD = null;
+    document.getElementById('esc2-doc-file').value = '';
+    hideDocViewer('esc2-doc-viewer', 'esc2-doc-preview');
+    document.getElementById('escale-form').style.display = 'block';
+    document.getElementById('escale-form-title').textContent = isNew ? 'Nouvelle escale' : 'Modifier l\'escale';
+    document.getElementById('esc2-edit-id').value = isNew ? '' : data.id;
+    document.getElementById('esc2-num').value = isNew ? '' : (data.num_escale||'');
+    document.getElementById('esc2-nom').value = isNew ? '' : (data.nom_batiment||'');
+    document.getElementById('esc2-type').value = isNew ? 'fregate' : (data.type_batiment||'autre');
+    document.getElementById('esc2-nationalite').value = isNew ? '' : (data.nationalite||'');
+    document.getElementById('esc2-pavillon').value = isNew ? '' : (data.pavillon||'');
+    document.getElementById('esc2-commandant').value = isNew ? '' : (data.commandant||'');
+    document.getElementById('esc2-equipage').value = isNew ? '' : (data.equipage||'');
+    document.getElementById('esc2-longueur').value = isNew ? '' : (data.longueur||'');
+    document.getElementById('esc2-tirant').value = isNew ? '' : (data.tirant_eau||'');
+    document.getElementById('esc2-poste').value = isNew ? '' : (data.poste_amarrage||'');
+    document.getElementById('esc2-eta').value = isNew ? '' : (data.eta ? data.eta.slice(0,16) : '');
+    document.getElementById('esc2-eta-reelle').value = isNew ? '' : (data.eta_reelle ? data.eta_reelle.slice(0,16) : '');
+    document.getElementById('esc2-etd').value = isNew ? '' : (data.etd ? data.etd.slice(0,16) : '');
+    document.getElementById('esc2-etd-reelle').value = isNew ? '' : (data.etd_reelle ? data.etd_reelle.slice(0,16) : '');
+    document.getElementById('esc2-motif').value = isNew ? 'visite_protocolaire' : (data.motif||'visite_protocolaire');
+    document.getElementById('esc2-statut').value = isNew ? 'attendu' : (data.statut||'attendu');
+    document.getElementById('esc2-observations').value = isNew ? '' : (data.observations||'');
+    // Document existant — preview + lien téléchargement
+    const existingDiv  = document.getElementById('esc2-doc-existing');
+    const existingLink = document.getElementById('esc2-doc-link');
+    hideDocViewer('esc2-doc-viewer', 'esc2-doc-preview');
+    if (!isNew && data.doc_autorisation_data && data.doc_autorisation_nom) {
+        existingLink.dataset.docData = data.doc_autorisation_data;
+        existingLink.dataset.docNom  = data.doc_autorisation_nom;
+        existingLink.textContent = '⬇ ' + data.doc_autorisation_nom;
+        existingDiv.style.display = 'block';
+        showDocViewer('esc2-doc-viewer', 'esc2-doc-preview', data.doc_autorisation_data, data.doc_autorisation_nom);
+    } else {
+        existingDiv.style.display = 'none';
+    }
+    document.getElementById('escale-form').scrollIntoView({ behavior:'smooth' });
+}
+
+async function saveEscale() {
+    const id = document.getElementById('esc2-edit-id').value;
+    const nom = document.getElementById('esc2-nom').value.trim();
+    if (!nom) { alert('Le nom du bâtiment est requis.'); return; }
+    const payload = {
+        num_escale: document.getElementById('esc2-num').value.trim(),
+        nom_batiment: nom,
+        type_batiment: document.getElementById('esc2-type').value,
+        nationalite: document.getElementById('esc2-nationalite').value.trim(),
+        pavillon: document.getElementById('esc2-pavillon').value.trim(),
+        commandant: document.getElementById('esc2-commandant').value.trim(),
+        equipage: document.getElementById('esc2-equipage').value || null,
+        longueur: document.getElementById('esc2-longueur').value || null,
+        tirant_eau: document.getElementById('esc2-tirant').value || null,
+        poste_amarrage: document.getElementById('esc2-poste').value.trim(),
+        eta: document.getElementById('esc2-eta').value || null,
+        eta_reelle: document.getElementById('esc2-eta-reelle').value || null,
+        etd: document.getElementById('esc2-etd').value || null,
+        etd_reelle: document.getElementById('esc2-etd-reelle').value || null,
+        motif: document.getElementById('esc2-motif').value,
+        statut: document.getElementById('esc2-statut').value,
+        observations: document.getElementById('esc2-observations').value.trim(),
+        equipe_id: getTeam(tod()),
+        doc_autorisation_data: _esc2DocFD ? (_esc2DocFD.data === '__clear__' ? null : _esc2DocFD.data) : undefined,
+        doc_autorisation_nom:  _esc2DocFD ? (_esc2DocFD.data === '__clear__' ? null : _esc2DocFD.name) : undefined,
+    };
+    try {
+        const result = id
+            ? await api('/escales/' + id, { method: 'PUT', body: JSON.stringify(payload) })
+            : await api('/escales', { method: 'POST', body: JSON.stringify(payload) });
+        if (id) {
+            const idx = D.escales.findIndex(e => e.id === id);
+            if (idx !== -1) D.escales[idx] = result; else D.escales.unshift(result);
+        } else {
+            D.escales.unshift(result);
+        }
+        document.getElementById('escale-form').style.display = 'none';
+        renderEscales();
+    } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+function fmtDt(val) {
+    if (!val) return '—';
+    const d = new Date(val);
+    return d.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' })
+        + ' ' + d.toTimeString().slice(0,5);
+}
+
+function etaDelay(eta, etaReelle) {
+    if (!eta || !etaReelle) return '';
+    const diff = Math.round((new Date(etaReelle) - new Date(eta)) / 60000);
+    if (diff === 0) return '<span style="color:#27ae60;font-size:10px">À l\'heure</span>';
+    const sign = diff > 0 ? '+' : '';
+    const col = diff > 0 ? '#ef4444' : '#27ae60';
+    const abs = Math.abs(diff);
+    const label = abs >= 60 ? `${Math.floor(abs/60)}h${abs%60?String(abs%60).padStart(2,'0')+'min':''}` : abs+'min';
+    return `<span style="color:${col};font-size:10px">${sign}${label}</span>`;
+}
+
+function renderEscales() {
+    const fltSt   = document.getElementById('esl-flt-st')?.value   || '';
+    const fltFrom = document.getElementById('esl-flt-from')?.value || '';
+    const fltTo   = document.getElementById('esl-flt-to')?.value   || '';
+
+    let rows = D.escales.filter(e => {
+        if (fltSt && e.statut !== fltSt) return false;
+        if (fltFrom && e.eta && e.eta < fltFrom) return false;
+        if (fltTo   && e.eta && e.eta.slice(0,10) > fltTo) return false;
+        return true;
+    });
+
+    // Stats
+    document.getElementById('esl-total').textContent    = D.escales.length;
+    document.getElementById('esl-attendu').textContent  = D.escales.filter(e=>e.statut==='attendu').length;
+    document.getElementById('esl-aquai').textContent    = D.escales.filter(e=>e.statut==='a_quai').length;
+    document.getElementById('esl-appareille').textContent = D.escales.filter(e=>e.statut==='appareille').length;
+    document.getElementById('esl-count-lbl').textContent = `${rows.length} escale(s)`;
+
+    const el = document.getElementById('escale-list');
+    if (!rows.length) {
+        el.innerHTML = '<div class="empty">Aucune escale enregistrée.</div>';
+        return;
+    }
+
+    let html = '<div class="tw"><table><thead><tr>'
+        + '<th>N° Escale</th><th>Bâtiment</th><th>Type</th><th>Nationalité</th>'
+        + '<th>ETA prévue</th><th>ETA réelle</th><th>ETD prévue</th>'
+        + '<th>Poste</th><th>Motif</th><th>Statut</th><th>Actions</th>'
+        + '</tr></thead><tbody>';
+
+    rows.forEach(e => {
+        const delay = etaDelay(e.eta, e.eta_reelle);
+        const escDocBtn = e.doc_autorisation_data
+            ? `<br><a href="#" data-doc-data="${encodeURIComponent(e.doc_autorisation_data)}" data-doc-nom="${e.doc_autorisation_nom||'document'}" onclick="dlDocInline(event,this)" style="font-size:10px;color:rgba(200,164,74,.8)">📎 ${e.doc_autorisation_nom||'Document'}</a>`
+            : '';
+        html += `<tr>
+            <td style="font-family:monospace;font-size:11px">${e.num_escale}</td>
+            <td><strong>${e.nom_batiment}</strong>${escDocBtn}</td>
+            <td>${ESC2_TYPE_L[e.type_batiment]||e.type_batiment}</td>
+            <td>${e.nationalite||'—'} ${e.pavillon ? `<span style="font-size:10px;color:var(--color-text-secondary)">(${e.pavillon})</span>` : ''}</td>
+            <td style="font-size:11px">${fmtDt(e.eta)}</td>
+            <td style="font-size:11px">${fmtDt(e.eta_reelle)} ${delay}</td>
+            <td style="font-size:11px">${fmtDt(e.etd)}</td>
+            <td style="font-size:11px">${e.poste_amarrage||'—'}</td>
+            <td style="font-size:11px">${ESC2_MOTIF_L[e.motif]||e.motif}</td>
+            <td><span class="badge ${ESC2_STATUT_C[e.statut]||'bi'}">${ESC2_STATUT_L[e.statut]||e.statut}</span></td>
+            <td>
+                <div class="flex" style="gap:4px">
+                    <select style="font-size:11px;padding:2px 4px" onchange="patchEscaleStatut('${e.id}',this.value);this.value=''" title="Changer le statut">
+                        <option value="">Statut…</option>
+                        <option value="attendu">Attendu</option>
+                        <option value="a_quai">À quai</option>
+                        <option value="appareille">Appareillé</option>
+                        <option value="annule">Annulé</option>
+                    </select>
+                    <button class="btn" style="padding:3px 8px;font-size:11px" onclick='openEscaleForm(false,${JSON.stringify(e)})'>✎</button>
+                    <button class="btn br" style="padding:3px 8px;font-size:11px" onclick="delEscale('${e.id}')">✕</button>
+                </div>
+            </td>
+        </tr>`;
+        if (e.observations) {
+            html += `<tr><td colspan="11" style="font-size:11px;color:var(--color-text-secondary);padding:4px 12px;font-style:italic">
+                📝 ${e.observations}</td></tr>`;
+        }
+    });
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+}
+
+async function patchEscaleStatut(id, statut) {
+    try {
+        const r = await api('/escales/' + id + '/statut', { method: 'PATCH', body: JSON.stringify({ statut }) });
+        const idx = D.escales.findIndex(e => e.id === id);
+        if (idx !== -1) D.escales[idx] = r;
+        renderEscales();
+    } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+async function delEscale(id) {
+    if (!confirm('Supprimer cette escale ?')) return;
+    try {
+        await api('/escales/' + id, { method: 'DELETE' });
+        D.escales = D.escales.filter(e => e.id !== id);
+        renderEscales();
+    } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+window.openEscaleForm = openEscaleForm;
+window.patchEscaleStatut = patchEscaleStatut;
+window.delEscale = delEscale;
+
+// ═══════════════════════════════════════════════════════════════
+// ETA WAPCO — Navires commerciaux
+// ═══════════════════════════════════════════════════════════════
+
+const WAP_TYPE_L = {
+    cargo:'Cargo général', porte_conteneurs:'Porte-conteneurs', vraquier:'Vraquier',
+    petrolier:'Pétrolier', roro:'Roro', ferry:'Ferry/Passagers',
+    chimiqueur:'Chimiqueur', autre:'Autre'
+};
+const WAP_STATUT_C = {
+    planifie:'bw', en_route:'bi', au_port:'bv',
+    en_dechargement:'bg', appareille:'', annule:'br'
+};
+const WAP_STATUT_L = {
+    planifie:'Planifié', en_route:'En route', au_port:'Au port',
+    en_dechargement:'En déchargement', appareille:'Appareillé', annule:'Annulé'
+};
+
+function openWapcoForm(isNew, data) {
+    _wapDocFD = null;
+    document.getElementById('wap-doc-file').value = '';
+    hideDocViewer('wap-doc-viewer', 'wap-doc-preview');
+    document.getElementById('wapco-form').style.display = 'block';
+    document.getElementById('wapco-form-title').textContent = isNew ? 'Nouvel ETA WAPCO' : 'Modifier l\'ETA';
+    document.getElementById('wap-edit-id').value = isNew ? '' : data.id;
+    document.getElementById('wap-num').value = isNew ? '' : (data.num_voyage||'');
+    document.getElementById('wap-nom').value = isNew ? '' : (data.nom_navire||'');
+    document.getElementById('wap-mmsi').value = isNew ? '' : (data.mmsi||'');
+    document.getElementById('wap-imo').value = isNew ? '' : (data.imo||'');
+    document.getElementById('wap-type').value = isNew ? 'cargo' : (data.type_navire||'cargo');
+    document.getElementById('wap-pavillon').value = isNew ? '' : (data.pavillon||'');
+    document.getElementById('wap-commandant').value = isNew ? '' : (data.commandant||'');
+    document.getElementById('wap-origine').value = isNew ? '' : (data.port_origine||'');
+    document.getElementById('wap-cargaison').value = isNew ? '' : (data.cargaison||'');
+    document.getElementById('wap-quantite').value = isNew ? '' : (data.quantite||'');
+    document.getElementById('wap-eta').value = isNew ? '' : (data.eta ? data.eta.slice(0,16) : '');
+    document.getElementById('wap-eta-reelle').value = isNew ? '' : (data.eta_reelle ? data.eta_reelle.slice(0,16) : '');
+    document.getElementById('wap-etd').value = isNew ? '' : (data.etd ? data.etd.slice(0,16) : '');
+    document.getElementById('wap-poste').value = isNew ? '' : (data.poste||'');
+    document.getElementById('wap-escorte-req').checked = isNew ? false : !!data.escorte_requise;
+    document.getElementById('wap-vhf').value = isNew ? '' : (data.vhf||'');
+    document.getElementById('wap-agent').value = isNew ? '' : (data.agent_consignataire||'');
+    document.getElementById('wap-statut').value = isNew ? 'planifie' : (data.statut||'planifie');
+    document.getElementById('wap-observations').value = isNew ? '' : (data.observations||'');
+    // Document existant — preview + lien téléchargement
+    const wapExistingDiv  = document.getElementById('wap-doc-existing');
+    const wapExistingLink = document.getElementById('wap-doc-link');
+    hideDocViewer('wap-doc-viewer', 'wap-doc-preview');
+    if (!isNew && data.doc_autorisation_data && data.doc_autorisation_nom) {
+        wapExistingLink.dataset.docData = data.doc_autorisation_data;
+        wapExistingLink.dataset.docNom  = data.doc_autorisation_nom;
+        wapExistingLink.textContent = '⬇ ' + data.doc_autorisation_nom;
+        wapExistingDiv.style.display = 'block';
+        showDocViewer('wap-doc-viewer', 'wap-doc-preview', data.doc_autorisation_data, data.doc_autorisation_nom);
+    } else {
+        wapExistingDiv.style.display = 'none';
+    }
+    document.getElementById('wapco-form').scrollIntoView({ behavior:'smooth' });
+}
+
+async function saveWapco() {
+    const id = document.getElementById('wap-edit-id').value;
+    const nom = document.getElementById('wap-nom').value.trim();
+    if (!nom) { alert('Le nom du navire est requis.'); return; }
+    const payload = {
+        num_voyage: document.getElementById('wap-num').value.trim(),
+        nom_navire: nom,
+        mmsi: document.getElementById('wap-mmsi').value.trim(),
+        imo: document.getElementById('wap-imo').value.trim(),
+        type_navire: document.getElementById('wap-type').value,
+        pavillon: document.getElementById('wap-pavillon').value.trim(),
+        commandant: document.getElementById('wap-commandant').value.trim(),
+        port_origine: document.getElementById('wap-origine').value.trim(),
+        cargaison: document.getElementById('wap-cargaison').value.trim(),
+        quantite: document.getElementById('wap-quantite').value || null,
+        eta: document.getElementById('wap-eta').value || null,
+        eta_reelle: document.getElementById('wap-eta-reelle').value || null,
+        etd: document.getElementById('wap-etd').value || null,
+        poste: document.getElementById('wap-poste').value.trim(),
+        escorte_requise: document.getElementById('wap-escorte-req').checked,
+        vhf: document.getElementById('wap-vhf').value.trim(),
+        agent_consignataire: document.getElementById('wap-agent').value.trim(),
+        statut: document.getElementById('wap-statut').value,
+        observations: document.getElementById('wap-observations').value.trim(),
+        equipe_id: getTeam(tod()),
+        doc_autorisation_data: _wapDocFD ? (_wapDocFD.data === '__clear__' ? null : _wapDocFD.data) : undefined,
+        doc_autorisation_nom:  _wapDocFD ? (_wapDocFD.data === '__clear__' ? null : _wapDocFD.name) : undefined,
+    };
+    try {
+        const result = id
+            ? await api('/eta-wapco/' + id, { method: 'PUT', body: JSON.stringify(payload) })
+            : await api('/eta-wapco', { method: 'POST', body: JSON.stringify(payload) });
+        if (id) {
+            const idx = D.etaWapco.findIndex(w => w.id === id);
+            if (idx !== -1) D.etaWapco[idx] = result; else D.etaWapco.unshift(result);
+        } else {
+            D.etaWapco.push(result);
+        }
+        document.getElementById('wapco-form').style.display = 'none';
+        renderEtaWapco();
+    } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+function renderEtaWapco() {
+    const fltSt   = document.getElementById('wap-flt-st')?.value   || '';
+    const fltFrom = document.getElementById('wap-flt-from')?.value || '';
+    const fltTo   = document.getElementById('wap-flt-to')?.value   || '';
+
+    let rows = D.etaWapco.filter(w => {
+        if (fltSt && w.statut !== fltSt) return false;
+        if (fltFrom && w.eta && w.eta < fltFrom) return false;
+        if (fltTo   && w.eta && w.eta.slice(0,10) > fltTo) return false;
+        return true;
+    });
+
+    // Stats
+    document.getElementById('wap-total').textContent    = D.etaWapco.length;
+    document.getElementById('wap-plan').textContent     = D.etaWapco.filter(w=>w.statut==='planifie').length;
+    document.getElementById('wap-enroute').textContent  = D.etaWapco.filter(w=>w.statut==='en_route').length;
+    document.getElementById('wap-port').textContent     = D.etaWapco.filter(w=>w.statut==='au_port').length;
+    document.getElementById('wap-dech').textContent     = D.etaWapco.filter(w=>w.statut==='en_dechargement').length;
+    document.getElementById('wap-esc-req').textContent  = D.etaWapco.filter(w=>w.escorte_requise).length;
+    document.getElementById('wap-count-lbl').textContent = `${rows.length} ETA(s)`;
+
+    const el = document.getElementById('wapco-list');
+    if (!rows.length) {
+        el.innerHTML = '<div class="empty">Aucun ETA WAPCO enregistré.</div>';
+        return;
+    }
+
+    let html = '<div class="tw"><table><thead><tr>'
+        + '<th>N° Voyage</th><th>Navire</th><th>Type</th><th>Origine</th>'
+        + '<th>ETA prévue</th><th>ETA réelle</th><th>ETD</th>'
+        + '<th>Poste</th><th>Cargaison</th><th>Escorte</th><th>Statut</th><th>Actions</th>'
+        + '</tr></thead><tbody>';
+
+    rows.forEach(w => {
+        const delay = etaDelay(w.eta, w.eta_reelle);
+        const escBadge = w.escorte_requise
+            ? `<span class="badge br" style="font-size:10px">Requise</span>`
+            : `<span style="font-size:10px;color:var(--color-text-secondary)">Non</span>`;
+        const wapDocBtn = w.doc_autorisation_data
+            ? `<br><a href="#" data-doc-data="${encodeURIComponent(w.doc_autorisation_data)}" data-doc-nom="${w.doc_autorisation_nom||'document'}" onclick="dlDocInline(event,this)" style="font-size:10px;color:rgba(200,164,74,.8)">📎 ${w.doc_autorisation_nom||'Document'}</a>`
+            : '';
+        html += `<tr>
+            <td style="font-family:monospace;font-size:11px">${w.num_voyage}</td>
+            <td>
+                <strong>${w.nom_navire}</strong>${wapDocBtn}<br>
+                <span style="font-size:10px;color:var(--color-text-secondary)">${w.mmsi ? 'MMSI: '+w.mmsi : ''} ${w.imo ? '· IMO: '+w.imo : ''}</span>
+            </td>
+            <td style="font-size:11px">${WAP_TYPE_L[w.type_navire]||w.type_navire}</td>
+            <td style="font-size:11px">${w.port_origine||'—'}</td>
+            <td style="font-size:11px">${fmtDt(w.eta)}</td>
+            <td style="font-size:11px">${fmtDt(w.eta_reelle)} ${delay}</td>
+            <td style="font-size:11px">${fmtDt(w.etd)}</td>
+            <td style="font-size:11px">${w.poste||'—'}</td>
+            <td style="font-size:11px">${w.cargaison||'—'} ${w.quantite ? `<span style="color:var(--color-text-secondary)">(${Number(w.quantite).toLocaleString('fr-FR')} t)</span>` : ''}</td>
+            <td>${escBadge}</td>
+            <td><span class="badge ${WAP_STATUT_C[w.statut]||'bi'}">${WAP_STATUT_L[w.statut]||w.statut}</span></td>
+            <td>
+                <div class="flex" style="gap:4px">
+                    <select style="font-size:11px;padding:2px 4px" onchange="patchWapcoStatut('${w.id}',this.value);this.value=''" title="Changer le statut">
+                        <option value="">Statut…</option>
+                        <option value="planifie">Planifié</option>
+                        <option value="en_route">En route</option>
+                        <option value="au_port">Au port</option>
+                        <option value="en_dechargement">En déchargement</option>
+                        <option value="appareille">Appareillé</option>
+                        <option value="annule">Annulé</option>
+                    </select>
+                    <button class="btn" style="padding:3px 8px;font-size:11px" onclick='openWapcoForm(false,${JSON.stringify(w)})'>✎</button>
+                    <button class="btn br" style="padding:3px 8px;font-size:11px" onclick="delWapco('${w.id}')">✕</button>
+                </div>
+            </td>
+        </tr>`;
+        if (w.observations) {
+            html += `<tr><td colspan="12" style="font-size:11px;color:var(--color-text-secondary);padding:4px 12px;font-style:italic">
+                📝 ${w.observations}</td></tr>`;
+        }
+    });
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+}
+
+async function patchWapcoStatut(id, statut) {
+    try {
+        const r = await api('/eta-wapco/' + id + '/statut', { method: 'PATCH', body: JSON.stringify({ statut }) });
+        const idx = D.etaWapco.findIndex(w => w.id === id);
+        if (idx !== -1) D.etaWapco[idx] = r;
+        renderEtaWapco();
+    } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+async function delWapco(id) {
+    if (!confirm('Supprimer cet ETA WAPCO ?')) return;
+    try {
+        await api('/eta-wapco/' + id, { method: 'DELETE' });
+        D.etaWapco = D.etaWapco.filter(w => w.id !== id);
+        renderEtaWapco();
+    } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+window.openWapcoForm = openWapcoForm;
+window.patchWapcoStatut = patchWapcoStatut;
+window.delWapco = delWapco;
+
+// Téléchargement depuis le tableau (data encodée dans l'attribut HTML)
+window.dlDocInline = function(e, a) {
+    e.preventDefault();
+    const data = decodeURIComponent(a.dataset.docData);
+    const name = a.dataset.docNom || 'document';
+    const link = document.createElement('a');
+    link.href = data; link.download = name;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+};
+
+
+// ═══════════════════════════════════════════════════════════════
+// GENERIC IO DROPDOWN TOGGLE
+// ═══════════════════════════════════════════════════════════════
+
+window.toggleDropdown = function(id) {
+    const all = document.querySelectorAll('.io-dropdown');
+    all.forEach(d => { if (d.id !== id) d.style.display = 'none'; });
+    const dd = document.getElementById(id);
+    if (dd) dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+};
+
+document.addEventListener('click', e => {
+    if (!e.target.closest('[onclick*="toggleDropdown"]')) {
+        document.querySelectorAll('.io-dropdown').forEach(d => d.style.display = 'none');
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// MODULE CONFIG (columns, API, labels)
+// ═══════════════════════════════════════════════════════════════
+
+const MODULE_CFG = {
+    sitrep: {
+        label: 'SITREPs',
+        apiGet: '/sitreps',
+        apiPost: '/sitreps',
+        dataKey: 'sitreps',
+        renderFn: () => renderSitrep(),
+        statutOptions: [],
+        sortFields: { date: 'date', nom: 'num', statut: 'equipe', equipe: 'equipe' },
+        csvCols: ['id','num','date','heure','equipe','speed','course','lat','lon','azm_pac','dist_pac','dist_cote','azm_spm','dist_spm','comment'],
+        csvLabels: ['ID','N°','Date','Heure','Équipe','Speed','Course','Lat','Lon','AZM/PAC','Dist/PAC','Dist/Côte','AZM/SPM','Dist/SPM','Commentaire'],
+        pdfTitle: 'SITREP — Situation Reports',
+        pdfCols: ['num','date','heure','equipe','speed','course','lat','lon','comment'],
+        pdfLabels: ['N°','Date','Heure','Éq.','Speed','Course','Lat','Lon','Commentaire'],
+        buildRow: r => ({
+            num_escale: undefined,
+            num: r.num, date: r.date, heure: r.heure||'', equipe: r.equipe,
+            speed: r.speed, course: r.course, lat: r.lat, lon: r.lon,
+            comment: r.comment
+        }),
+    },
+    escorte: {
+        label: 'Missions d\'Escorte',
+        apiGet: '/escortes',
+        apiPost: '/escortes',
+        dataKey: 'escortes',
+        renderFn: () => renderEscorte(),
+        statutOptions: ['planifiee','encours','terminee','annulee'],
+        statutLabels: { planifiee:'Planifiée', encours:'En cours', terminee:'Terminée', annulee:'Annulée' },
+        sortFields: { date: 'date', nom: 'cible_nom', statut: 'statut', equipe: 'equipe' },
+        csvCols: ['id','num','date','heure','type','equipe','zone','cible_nom','cible_mmsi','cible_imo','cible_pavillon','cible_type','statut','comment'],
+        csvLabels: ['ID','N° Mission','Date','Heure','Type','Équipe','Zone','Navire cible','MMSI','IMO','Pavillon','Type navire','Statut','Commentaire'],
+        pdfTitle: 'Missions d\'Escorte — Marine Nationale',
+        pdfCols: ['num','date','heure','type','equipe','cible_nom','cible_mmsi','zone','statut'],
+        pdfLabels: ['N°','Date','Heure','Type','Éq.','Navire','MMSI','Zone','Statut'],
+        buildRow: r => r,
+    },
+    escales: {
+        label: 'Navires de guerre en escale',
+        apiGet: '/escales',
+        apiPost: '/escales',
+        dataKey: 'escales',
+        renderFn: () => renderEscales(),
+        statutOptions: ['attendu','a_quai','appareille','annule'],
+        statutLabels: ESC2_STATUT_L,
+        sortFields: { date: 'eta', nom: 'nom_batiment', statut: 'statut', equipe: 'equipe_id' },
+        csvCols: ['id','num_escale','nom_batiment','type_batiment','nationalite','pavillon','commandant','equipage','longueur','tirant_eau','poste_amarrage','eta','eta_reelle','etd','etd_reelle','motif','statut','observations'],
+        csvLabels: ['ID','N° Escale','Bâtiment','Type','Nationalité','Pavillon','Commandant','Équipage','Longueur (m)','Tirant d\'eau (m)','Poste','ETA prévue','ETA réelle','ETD prévue','ETD réelle','Motif','Statut','Observations'],
+        pdfTitle: 'Navires de guerre en escale',
+        pdfCols: ['num_escale','nom_batiment','type_batiment','nationalite','eta','etd','poste_amarrage','motif','statut'],
+        pdfLabels: ['N° Escale','Bâtiment','Type','Nationalité','ETA','ETD','Poste','Motif','Statut'],
+        buildRow: r => r,
+        mapImport: row => ({
+            num_escale: row['N° Escale']||row['num_escale']||'',
+            nom_batiment: row['Bâtiment']||row['nom_batiment']||'',
+            type_batiment: row['Type']||row['type_batiment']||'autre',
+            nationalite: row['Nationalité']||row['nationalite']||'',
+            pavillon: row['Pavillon']||row['pavillon']||'',
+            commandant: row['Commandant']||row['commandant']||'',
+            equipage: row['Équipage']||row['equipage']||null,
+            longueur: row['Longueur (m)']||row['longueur']||null,
+            tirant_eau: row['Tirant d\'eau (m)']||row['tirant_eau']||null,
+            poste_amarrage: row['Poste']||row['poste_amarrage']||'',
+            eta: row['ETA prévue']||row['eta']||null,
+            etd: row['ETD prévue']||row['etd']||null,
+            motif: row['Motif']||row['motif']||'visite_protocolaire',
+            statut: row['Statut']||row['statut']||'attendu',
+            observations: row['Observations']||row['observations']||'',
+        }),
+    },
+    wapco: {
+        label: 'ETA WAPCO',
+        apiGet: '/eta-wapco',
+        apiPost: '/eta-wapco',
+        dataKey: 'etaWapco',
+        renderFn: () => renderEtaWapco(),
+        statutOptions: ['planifie','en_route','au_port','en_dechargement','appareille','annule'],
+        statutLabels: WAP_STATUT_L,
+        sortFields: { date: 'eta', nom: 'nom_navire', statut: 'statut', equipe: 'equipe_id' },
+        csvCols: ['id','num_voyage','nom_navire','mmsi','imo','type_navire','pavillon','commandant','port_origine','cargaison','quantite','eta','eta_reelle','etd','poste','escorte_requise','vhf','agent_consignataire','statut','observations'],
+        csvLabels: ['ID','N° Voyage','Navire','MMSI','IMO','Type','Pavillon','Commandant','Port d\'origine','Cargaison','Quantité (t)','ETA prévue','ETA réelle','ETD','Poste','Escorte req.','VHF','Agent','Statut','Observations'],
+        pdfTitle: 'ETA WAPCO — Navires commerciaux',
+        pdfCols: ['num_voyage','nom_navire','type_navire','port_origine','eta','etd','poste','cargaison','statut'],
+        pdfLabels: ['N° Voyage','Navire','Type','Origine','ETA','ETD','Poste','Cargaison','Statut'],
+        buildRow: r => r,
+        mapImport: row => ({
+            num_voyage: row['N° Voyage']||row['num_voyage']||'',
+            nom_navire: row['Navire']||row['nom_navire']||'',
+            mmsi: row['MMSI']||row['mmsi']||'',
+            imo: row['IMO']||row['imo']||'',
+            type_navire: row['Type']||row['type_navire']||'cargo',
+            pavillon: row['Pavillon']||row['pavillon']||'',
+            commandant: row['Commandant']||row['commandant']||'',
+            port_origine: row['Port d\'origine']||row['port_origine']||'',
+            cargaison: row['Cargaison']||row['cargaison']||'',
+            quantite: row['Quantité (t)']||row['quantite']||null,
+            eta: row['ETA prévue']||row['eta']||null,
+            etd: row['ETD']||row['etd']||null,
+            poste: row['Poste']||row['poste']||'',
+            escorte_requise: (row['Escorte req.']||row['escorte_requise']||'').toString().toLowerCase() === 'true',
+            vhf: row['VHF']||row['vhf']||'',
+            agent_consignataire: row['Agent']||row['agent_consignataire']||'',
+            statut: row['Statut']||row['statut']||'planifie',
+            observations: row['Observations']||row['observations']||'',
+        }),
+    },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// CSV EXPORT
+// ═══════════════════════════════════════════════════════════════
+
+window.exportModuleCSV = function(module) {
+    const cfg = MODULE_CFG[module];
+    if (!cfg) return;
+    const data = D[cfg.dataKey] || [];
+    if (!data.length) { alert('Aucune donnée à exporter.'); return; }
+    const cols = cfg.csvCols;
+    const labels = cfg.csvLabels;
+    const rows = data.map(r => cols.map(c => {
+        const v = r[c];
+        if (v === null || v === undefined) return '""';
+        return `"${String(v).replace(/"/g,'""')}"`;
+    }).join(','));
+    const csv = '\uFEFF' + labels.map(l => `"${l}"`).join(',') + '\n' + rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = `jocc_${module}_${tod()}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    document.querySelectorAll('.io-dropdown').forEach(d => d.style.display = 'none');
+};
+
+// ═══════════════════════════════════════════════════════════════
+// EXCEL EXPORT
+// ═══════════════════════════════════════════════════════════════
+
+window.exportModuleXLSX = async function(module) {
+    const cfg = MODULE_CFG[module];
+    if (!cfg) return;
+    const data = D[cfg.dataKey] || [];
+    if (!data.length) { alert('Aucune donnée à exporter.'); return; }
+    document.querySelectorAll('.io-dropdown').forEach(d => d.style.display = 'none');
+
+    try {
+        await ensureXLSX();
+        const XLSX = window.XLSX;
+
+        // Construire les lignes avec en-têtes FR
+        const cols   = cfg.csvCols;
+        const labels = cfg.csvLabels;
+        const rows = data.map(r => {
+            const obj = {};
+            cols.forEach((c, i) => {
+                let v = r[c];
+                if (v === null || v === undefined) v = '';
+                // Exclure les blobs base64 (doc_autorisation_data)
+                if (c === 'doc_autorisation_data') v = v ? '(document joint)' : '';
+                obj[labels[i]] = v;
+            });
+            return obj;
+        });
+
+        const ws = XLSX.utils.json_to_sheet(rows, { header: labels });
+
+        // Largeur de colonnes automatique (max 40)
+        const colWidths = labels.map((lbl, i) => {
+            const maxLen = Math.max(
+                lbl.length,
+                ...data.map(r => {
+                    const c = cols[i];
+                    const v = c === 'doc_autorisation_data' ? '' : String(r[c] ?? '');
+                    return v.length;
+                })
+            );
+            return { wch: Math.min(maxLen + 2, 40) };
+        });
+        ws['!cols'] = colWidths;
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, cfg.label.slice(0, 31));
+
+        // Feuille méta
+        const meta = XLSX.utils.aoa_to_sheet([
+            ['Préfecture Maritime du Bénin — JOCC'],
+            ['Module', cfg.label],
+            ['Exporté le', new Date().toLocaleString('fr-FR')],
+            ['Nombre de lignes', data.length],
+        ]);
+        XLSX.utils.book_append_sheet(wb, meta, 'Informations');
+
+        XLSX.writeFile(wb, `jocc_${module}_${tod()}.xlsx`);
+    } catch(e) { alert('Erreur export Excel : ' + e.message); }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// CSV IMPORT
+// ═══════════════════════════════════════════════════════════════
+
+function parseCSV(text) {
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g,'').trim());
+    return lines.slice(1).map(line => {
+        const values = []; let cur = ''; let inQ = false;
+        for (let i = 0; i < line.length; i++) {
+            if (line[i] === '"') { inQ = !inQ; }
+            else if (line[i] === ',' && !inQ) { values.push(cur.replace(/^"|"$/g,'')); cur = ''; }
+            else { cur += line[i]; }
+        }
+        values.push(cur.replace(/^"|"$/g,''));
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = values[i] || '');
+        return obj;
+    });
+}
+
+window.importModuleCSV = async function(input, module) {
+    const file = input.files[0]; if (!file) return;
+    document.querySelectorAll('.io-dropdown').forEach(d => d.style.display = 'none');
+    const text = await file.text();
+    const rows = parseCSV(text);
+    await _doImport(module, rows);
+    input.value = '';
+};
+
+// ═══════════════════════════════════════════════════════════════
+// EXCEL IMPORT (via SheetJS from CDN — lazy loaded)
+// ═══════════════════════════════════════════════════════════════
+
+async function ensureXLSX() {
+    if (window.XLSX) return;
+    await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+    });
+}
+
+window.importModuleXLSX = async function(input, module) {
+    const file = input.files[0]; if (!file) return;
+    document.querySelectorAll('.io-dropdown').forEach(d => d.style.display = 'none');
+    try {
+        await ensureXLSX();
+        const buf = await file.arrayBuffer();
+        const wb = window.XLSX.read(buf, { type: 'array', cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = window.XLSX.utils.sheet_to_json(ws, { defval: '' });
+        await _doImport(module, rows);
+    } catch(e) { alert('Erreur lecture fichier : ' + e.message); }
+    input.value = '';
+};
+
+async function _doImport(module, rows) {
+    const cfg = MODULE_CFG[module];
+    if (!cfg) return;
+    if (!rows.length) { alert('Fichier vide ou format non reconnu.'); return; }
+    const mapFn = cfg.mapImport || (r => r);
+    let ok = 0, errors = 0;
+    for (const rawRow of rows) {
+        const payload = mapFn(rawRow);
+        if (!payload || !(payload.nom_batiment || payload.nom_navire || payload.num || payload.cible_nom)) {
+            errors++; continue;
+        }
+        try {
+            const result = await api(cfg.apiPost, { method: 'POST', body: JSON.stringify(payload) });
+            (D[cfg.dataKey] || []).push(result);
+            ok++;
+        } catch(e) { errors++; }
+    }
+    cfg.renderFn();
+    alert(`Import terminé : ${ok} ligne(s) importée(s)${errors ? `, ${errors} erreur(s) ignorée(s)` : ''}.`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PDF EXPORT (print window)
+// ═══════════════════════════════════════════════════════════════
+
+let _pdfModule = null;
+
+window.openExportPDF = function(module) {
+    const cfg = MODULE_CFG[module];
+    if (!cfg) return;
+    _pdfModule = module;
+    document.querySelectorAll('.io-dropdown').forEach(d => d.style.display = 'none');
+    document.getElementById('modal-pdf-module-lbl').textContent = 'Module : ' + cfg.label;
+
+    // Populate statut options
+    const sel = document.getElementById('pdf-filter-statut');
+    sel.innerHTML = '<option value="">Tous les statuts</option>';
+    if (cfg.statutOptions && cfg.statutLabels) {
+        cfg.statutOptions.forEach(s => {
+            const o = document.createElement('option');
+            o.value = s; o.textContent = cfg.statutLabels[s] || s;
+            sel.appendChild(o);
+        });
+    }
+    // Reset date filters
+    document.getElementById('pdf-filter-from').value = '';
+    document.getElementById('pdf-filter-to').value = '';
+    document.getElementById('modal-pdf').classList.add('open');
+};
+
+window.generatePDF = function() {
+    const cfg = MODULE_CFG[_pdfModule];
+    if (!cfg) return;
+    let data = [...(D[cfg.dataKey] || [])];
+
+    // Filters
+    const fltSt   = document.getElementById('pdf-filter-statut').value;
+    const fltFrom = document.getElementById('pdf-filter-from').value;
+    const fltTo   = document.getElementById('pdf-filter-to').value;
+    if (fltSt) data = data.filter(r => r.statut === fltSt || r.statut === fltSt);
+    if (fltFrom) data = data.filter(r => {
+        const dv = r.date || r.eta || r.created_at || '';
+        return !dv || dv.slice(0,10) >= fltFrom;
+    });
+    if (fltTo) data = data.filter(r => {
+        const dv = r.date || r.eta || r.created_at || '';
+        return !dv || dv.slice(0,10) <= fltTo;
+    });
+
+    // Sort
+    const sortField = document.getElementById('pdf-sort-field').value;
+    const sortDir   = document.getElementById('pdf-sort-dir').value;
+    const fieldKey  = cfg.sortFields[sortField] || 'date';
+    data.sort((a, b) => {
+        const av = String(a[fieldKey] || '').toLowerCase();
+        const bv = String(b[fieldKey] || '').toLowerCase();
+        return sortDir === 'asc' ? av.localeCompare(bv, 'fr') : bv.localeCompare(av, 'fr');
+    });
+
+    if (!data.length) { alert('Aucune donnée correspondant aux critères.'); return; }
+
+    const now  = new Date();
+    const dateStr = now.toLocaleDateString('fr-FR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
+    const timeStr = now.toTimeString().slice(0,5);
+    const user = window.currentUser ? `${window.currentUser.grade} ${window.currentUser.nom} ${window.currentUser.prenom}` : 'JOCC';
+
+    const cols   = cfg.pdfCols;
+    const labels = cfg.pdfLabels;
+
+    const thead = '<tr>' + labels.map(l => `<th>${l}</th>`).join('') + '</tr>';
+    const tbody = data.map(r => {
+        return '<tr>' + cols.map(c => {
+            let v = r[c];
+            if (v === null || v === undefined) v = '—';
+            // Format dates
+            if (typeof v === 'string' && v.length > 10 && v.includes('T')) {
+                v = fmtDt(v);
+            }
+            // Translate statut codes
+            const allLabels = { ...ESC2_STATUT_L, ...WAP_STATUT_L,
+                planifiee:'Planifiée', encours:'En cours', terminee:'Terminée', annulee:'Annulée' };
+            if (c === 'statut' && allLabels[v]) v = allLabels[v];
+            if (c === 'type_batiment' && ESC2_TYPE_L[v]) v = ESC2_TYPE_L[v];
+            if (c === 'type_navire' && WAP_TYPE_L[v]) v = WAP_TYPE_L[v];
+            return `<td>${String(v)}</td>`;
+        }).join('') + '</tr>';
+    }).join('');
+
+    const filters = [];
+    if (fltSt) filters.push('Statut : ' + (cfg.statutLabels?.[fltSt] || fltSt));
+    if (fltFrom) filters.push('Du : ' + fltFrom);
+    if (fltTo)   filters.push('Au : ' + fltTo);
+    const filterStr = filters.length ? `<div style="font-size:10px;color:#666;margin-top:4px">Filtres : ${filters.join(' · ')}</div>` : '';
+
+    const html = `<!DOCTYPE html><html lang="fr"><head>
+<meta charset="UTF-8"><title>${cfg.pdfTitle}</title>
+<style>
+  @page { size: A4 landscape; margin: 14mm; }
+  body { font-family: Arial, sans-serif; font-size: 10px; color: #1a1a2e; }
+  .header { margin-bottom: 14px; border-bottom: 2px solid #0d2035; padding-bottom: 8px; }
+  .header h1 { font-size: 16px; font-weight: 700; color: #0d2035; margin: 0 0 2px; }
+  .header .sub { font-size: 10px; color: #5a6478; }
+  .meta { font-size: 9px; color: #888; margin-top: 2px; }
+  .count { font-size: 10px; font-weight: 600; margin-bottom: 6px; }
+  table { width:100%; border-collapse: collapse; }
+  th { background: #0d2035; color: #fff; padding: 6px 8px; font-size: 9px; letter-spacing: .04em; text-align: left; }
+  td { padding: 5px 8px; border-bottom: 1px solid #e5e7eb; font-size: 9px; vertical-align: top; }
+  tr:nth-child(even) td { background: #f9fafb; }
+  .footer { margin-top: 12px; font-size: 8px; color: #aaa; text-align: right; border-top: 1px solid #e5e7eb; padding-top: 6px; }
+</style></head><body>
+<div class="header">
+  <h1>⚓ Préfecture Maritime du Bénin · JOCC</h1>
+  <div class="sub">${cfg.pdfTitle}</div>
+  ${filterStr}
+  <div class="meta">Généré le ${dateStr} à ${timeStr} · Par : ${user}</div>
+</div>
+<div class="count">${data.length} enregistrement(s) · Tri : ${labels[cols.indexOf(fieldKey)] || sortField} (${sortDir === 'asc' ? 'croissant' : 'décroissant'})</div>
+<table><thead>${thead}</thead><tbody>${tbody}</tbody></table>
+<div class="footer">JOCC — Document généré automatiquement · Confidentiel</div>
+<script>window.onload=()=>window.print();<\/script>
+</body></html>`;
+
+    const w = window.open('', '_blank');
+    w.document.write(html);
+    w.document.close();
+    document.getElementById('modal-pdf').classList.remove('open');
+};

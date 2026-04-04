@@ -862,6 +862,28 @@
       }
     }
 
+    /* ── IO DROPDOWN ── */
+    .io-dropdown {
+      position: absolute; right: 0; top: calc(100% + 4px); z-index: 900;
+      background: #0d2035; border: 1px solid rgba(200,164,74,.35);
+      border-radius: 8px; min-width: 190px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.5); overflow: hidden;
+    }
+    .io-item {
+      display: block; width: 100%; padding: 9px 14px; text-align: left;
+      background: none; border: none; color: #d4dde8;
+      font-family: inherit; font-size: 12px; cursor: pointer;
+      letter-spacing: .03em; transition: background .15s;
+    }
+    .io-item:hover { background: rgba(200,164,74,.14); color: #fff; }
+    .io-sep { height: 1px; background: rgba(200,164,74,.18); margin: 3px 0; }
+
+    /* ── PDF EXPORT MODAL ── */
+    #modal-pdf { display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+      z-index:3100; background:rgba(0,0,0,.6); backdrop-filter:blur(6px);
+      align-items:center; justify-content:center; }
+    #modal-pdf.open { display:flex; }
+
     /* ── AUTH ── */
     #login-overlay {
       position: fixed; top:0; left:0; width:100%; height:100%;
@@ -977,12 +999,14 @@
               <div><span class="hdr-live-dot"></span><span class="hdr-live-txt" id="hdr-user-name">Non connecté</span></div>
               <span id="hdr-role-badge" style="font-size:9px;opacity:.6;letter-spacing:.5px;padding-left:14px"></span>
             </div>
-            <button class="btn" style="padding:2px 8px;font-size:9px" onclick="doLogout()">Déconnexion</button>
           </div>
         </div>
         <div class="hdr-clock">
           <div class="hdr-time" id="hdr-time">--:--:--</div>
           <div class="hdr-date" id="hdr-date">---</div>
+          <button onclick="doLogout()" style="margin-top:6px;width:100%;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);border-radius:6px;padding:3px 8px;color:#f87171;font-size:9px;letter-spacing:.08em;cursor:pointer;font-family:inherit;text-transform:uppercase;transition:background .15s" onmouseover="this.style.background='rgba(248,113,113,.22)'" onmouseout="this.style.background='rgba(248,113,113,.12)'">
+            ⏻ Déconnexion
+          </button>
         </div>
       </div>
       <div class="hdr-stats">
@@ -1014,6 +1038,8 @@
       <button class="nb" data-tab="rapport">Rapport de quart</button>
       <button class="nb" data-tab="absences">Absences</button>
       <button class="nb" data-tab="escorte">Missions d'Escorte</button>
+      <button class="nb" data-tab="escales">Navires en escale</button>
+      <button class="nb" data-tab="eta-wapco">ETA WAPCO</button>
       <button class="nb" data-tab="audit" data-role="supervision">Journal d'audit</button>
       <button class="nb" data-tab="supervision">Supervision <span class="nd" id="notif-dot"
           style="display:none"></span></button>
@@ -1077,7 +1103,24 @@
             <div style="font-size:11px;color:rgba(111,163,200,.7);margin-top:2px;letter-spacing:.04em">Rapports de
               situation maritime / JOCC</div>
           </div>
-          <button class="btn btn-gold" id="btn-new-sitrep">+ Nouveau SITREP</button>
+          <div class="flex" style="gap:6px">
+            <div style="position:relative">
+              <button class="btn" style="font-size:11px" onclick="toggleDropdown('dd-sitrep-io')">⇅ Import / Export ▾</button>
+              <div id="dd-sitrep-io" class="io-dropdown" style="display:none">
+                <label class="io-item" style="cursor:pointer">
+                  ↑ Importer CSV <input type="file" accept=".csv" style="display:none" onchange="importModuleCSV(this,'sitrep')">
+                </label>
+                <label class="io-item" style="cursor:pointer">
+                  ↑ Importer Excel <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importModuleXLSX(this,'sitrep')">
+                </label>
+                <div class="io-sep"></div>
+                <button class="io-item" onclick="exportModuleCSV('sitrep')">↓ Exporter CSV</button>
+                <button class="io-item" onclick="exportModuleXLSX('sitrep')">↓ Exporter Excel</button>
+                <button class="io-item" onclick="openExportPDF('sitrep')">↓ Exporter PDF</button>
+              </div>
+            </div>
+            <button class="btn btn-gold" id="btn-new-sitrep">+ Nouveau SITREP</button>
+          </div>
         </div>
       </div>
       <div id="sitrep-form" style="display:none" class="card">
@@ -1574,6 +1617,42 @@
   </div>
 
   <!-- ── MODAL CHANGEMENT MOT DE PASSE ── -->
+  <!-- ── MODAL EXPORT PDF ── -->
+  <div id="modal-pdf">
+    <div style="background:var(--color-background-secondary);border:1px solid rgba(200,164,74,.3);border-radius:12px;padding:26px;width:360px;box-shadow:0 20px 40px rgba(0,0,0,.5)">
+      <div style="font-weight:700;font-size:13px;letter-spacing:.05em;margin-bottom:16px;color:rgba(200,164,74,.9)">↓ EXPORT PDF</div>
+      <div id="modal-pdf-module-lbl" style="font-size:11px;color:var(--color-text-secondary);margin-bottom:14px"></div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Trier par</label>
+        <select id="pdf-sort-field">
+          <option value="date">Date (ETA / Date)</option>
+          <option value="nom">Nom du bâtiment / navire</option>
+          <option value="statut">Statut</option>
+          <option value="equipe">Équipe</option>
+        </select>
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Ordre</label>
+        <select id="pdf-sort-dir">
+          <option value="asc">Croissant (A → Z)</option>
+          <option value="desc">Décroissant (Z → A)</option>
+        </select>
+      </div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Filtrer — Statut (optionnel)</label>
+        <select id="pdf-filter-statut"><option value="">Tous les statuts</option></select>
+      </div>
+      <div class="g2" style="margin-bottom:14px">
+        <div class="fg"><label>Du (optionnel)</label><input type="date" id="pdf-filter-from"></div>
+        <div class="fg"><label>Au (optionnel)</label><input type="date" id="pdf-filter-to"></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="document.getElementById('modal-pdf').classList.remove('open')">Annuler</button>
+        <button class="btn btn-gold" onclick="generatePDF()">Générer le PDF</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal-pw" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:3000;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);align-items:center;justify-content:center">
     <div style="background:var(--color-background-secondary);border:1px solid var(--color-border);border-radius:12px;padding:28px;width:340px;box-shadow:0 20px 40px rgba(0,0,0,.4)">
       <div style="font-weight:700;font-size:13px;letter-spacing:.05em;margin-bottom:18px">CHANGEMENT DE MOT DE PASSE</div>
@@ -1599,6 +1678,288 @@
     </div>
   </div>
 
+  <!-- ── ESCALES ── -->
+  <div id="tab-escales" class="tab" style="display:none">
+    <div class="card-dk mb12">
+      <div class="flex-b">
+        <div>
+          <div style="font-size:15px;font-weight:700;letter-spacing:.06em;color:rgba(200,164,74,.9)">⚓ NAVIRES DE GUERRE EN ESCALE</div>
+          <div style="font-size:10px;color:rgba(111,163,200,.7);margin-top:2px">Gestion des escales de bâtiments militaires étrangers · JOCC</div>
+        </div>
+        <div class="flex" style="gap:6px">
+          <div style="position:relative">
+            <button class="btn" style="font-size:11px" onclick="toggleDropdown('dd-escale-io')">⇅ Import / Export ▾</button>
+            <div id="dd-escale-io" class="io-dropdown" style="display:none">
+              <label class="io-item" style="cursor:pointer">
+                ↑ Importer CSV <input type="file" accept=".csv" style="display:none" onchange="importModuleCSV(this,'escales')">
+              </label>
+              <label class="io-item" style="cursor:pointer">
+                ↑ Importer Excel <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importModuleXLSX(this,'escales')">
+              </label>
+              <div class="io-sep"></div>
+              <button class="io-item" onclick="exportModuleCSV('escales')">↓ Exporter CSV</button>
+              <button class="io-item" onclick="exportModuleXLSX('escales')">↓ Exporter Excel</button>
+              <button class="io-item" onclick="openExportPDF('escales')">↓ Exporter PDF</button>
+            </div>
+          </div>
+          <button class="btn btn-gold" id="btn-new-escale">+ Nouvelle escale</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Formulaire escale -->
+    <div id="escale-form" style="display:none" class="card-section mb12">
+      <div class="card-section-header">
+        <div style="font-size:13px;font-weight:700" id="escale-form-title">Nouvelle escale</div>
+        <button class="btn" id="escale-cancel">✕ Annuler</button>
+      </div>
+      <div class="card-section-body">
+        <div class="section-lbl">📋 Identification du bâtiment</div>
+        <div class="g4 mb10">
+          <div class="fg"><label>N° Escale</label><input type="text" id="esc2-num" placeholder="ESC-2026-001"></div>
+          <div class="fg"><label>Nom du bâtiment</label><input type="text" id="esc2-nom" placeholder="FS JEAN BART..."></div>
+          <div class="fg"><label>Type de bâtiment</label>
+            <select id="esc2-type">
+              <option value="fregate">Frégate</option>
+              <option value="patrouilleur">Patrouilleur</option>
+              <option value="corvette">Corvette</option>
+              <option value="sous_marin">Sous-marin</option>
+              <option value="porte_helicopteres">Porte-hélicoptères</option>
+              <option value="aviso">Aviso</option>
+              <option value="batiment_soutien">Bâtiment de soutien</option>
+              <option value="autre">Autre</option>
+            </select>
+          </div>
+          <div class="fg"><label>Nationalité</label><input type="text" id="esc2-nationalite" placeholder="France, USA, Nigeria..."></div>
+          <div class="fg"><label>Pavillon</label><input type="text" id="esc2-pavillon" placeholder="FRA, USA, NGA..."></div>
+          <div class="fg"><label>Commandant</label><input type="text" id="esc2-commandant" placeholder="CF DUPONT Jean"></div>
+          <div class="fg"><label>Équipage</label><input type="number" id="esc2-equipage" placeholder="250" min="1"></div>
+          <div class="fg"><label>Longueur LOA (m)</label><input type="number" id="esc2-longueur" placeholder="120" step="0.1"></div>
+          <div class="fg"><label>Tirant d'eau (m)</label><input type="number" id="esc2-tirant" placeholder="5.5" step="0.1"></div>
+          <div class="fg"><label>Poste d'amarrage</label><input type="text" id="esc2-poste" placeholder="Quai Militaire A, Duc d'Albe 3..."></div>
+        </div>
+        <div class="section-lbl">🗓️ Planning de l'escale</div>
+        <div class="g4 mb10">
+          <div class="fg"><label>ETA (prévue)</label><input type="datetime-local" id="esc2-eta"></div>
+          <div class="fg"><label>ETA (réelle)</label><input type="datetime-local" id="esc2-eta-reelle"></div>
+          <div class="fg"><label>ETD (prévue)</label><input type="datetime-local" id="esc2-etd"></div>
+          <div class="fg"><label>ETD (réelle)</label><input type="datetime-local" id="esc2-etd-reelle"></div>
+          <div class="fg"><label>Motif de l'escale</label>
+            <select id="esc2-motif">
+              <option value="visite_protocolaire">Visite protocolaire</option>
+              <option value="ravitaillement">Ravitaillement</option>
+              <option value="maintenance">Maintenance / Réparation</option>
+              <option value="exercice">Exercice conjoint</option>
+              <option value="transit">Transit</option>
+              <option value="humanitaire">Mission humanitaire</option>
+              <option value="autre">Autre</option>
+            </select>
+          </div>
+          <div class="fg"><label>Statut</label>
+            <select id="esc2-statut">
+              <option value="attendu">Attendu</option>
+              <option value="a_quai">À quai</option>
+              <option value="appareille">Appareillé</option>
+              <option value="annule">Annulé</option>
+            </select>
+          </div>
+        </div>
+        <div class="fg mb10"><label>Observations / Instructions</label>
+          <textarea id="esc2-observations" rows="3" placeholder="Protocole, visites prévues, contraintes logistiques..."></textarea>
+        </div>
+        <div class="fg mb10">
+          <label>📎 Document d'autorisation</label>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:4px;flex-wrap:wrap">
+            <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px dashed rgba(200,164,74,.4);border-radius:6px;cursor:pointer;font-size:11px;color:rgba(200,164,74,.8);transition:background .15s" onmouseover="this.style.background='rgba(200,164,74,.08)'" onmouseout="this.style.background='none'">
+              ↑ Choisir un fichier (PDF, Word, image — max 10 Mo)
+              <input type="file" id="esc2-doc-file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" style="display:none" onchange="onEsc2DocChange(this)">
+            </label>
+            <span id="esc2-doc-preview" style="font-size:11px;color:rgba(111,163,200,.8)"></span>
+          </div>
+          <div id="esc2-doc-viewer" style="display:none;margin-top:10px;border:1px solid rgba(200,164,74,.25);border-radius:8px;overflow:hidden;background:rgba(0,0,0,.15)"></div>
+          <div id="esc2-doc-existing" style="display:none;margin-top:6px;font-size:11px">
+            <span style="color:var(--color-text-secondary)">Document existant : </span>
+            <a id="esc2-doc-link" href="#" style="color:rgba(200,164,74,.9)" onclick="dlDoc(this,'escale')">⬇ Télécharger</a>
+            <button onclick="clearDoc('esc2')" style="margin-left:8px;background:none;border:none;color:#f87171;cursor:pointer;font-size:11px;padding:0">✕ Supprimer</button>
+          </div>
+        </div>
+        <input type="hidden" id="esc2-edit-id">
+        <div class="flex">
+          <button class="btn btn-gold" id="esc2-save">✔ Enregistrer l'escale</button>
+          <button class="btn" id="escale-cancel2">✕ Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="g4 mb10">
+      <div class="stat"><div class="stat-l">Total escales</div><div class="stat-v" id="esl-total">0</div></div>
+      <div class="stat"><div class="stat-l">Attendus</div><div class="stat-v" id="esl-attendu" style="color:rgba(200,164,74,.9)">0</div></div>
+      <div class="stat"><div class="stat-l">À quai</div><div class="stat-v" id="esl-aquai" style="color:#27ae60">0</div></div>
+      <div class="stat"><div class="stat-l">Appareillés</div><div class="stat-v" id="esl-appareille" style="color:var(--color-text-secondary)">0</div></div>
+    </div>
+
+    <!-- Filtres -->
+    <div class="flex-b mb10">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.05em" id="esl-count-lbl"></div>
+      <div class="flex">
+        <select id="esl-flt-st" style="width:auto;font-size:12px">
+          <option value="">Tous statuts</option>
+          <option value="attendu">Attendu</option>
+          <option value="a_quai">À quai</option>
+          <option value="appareille">Appareillé</option>
+          <option value="annule">Annulé</option>
+        </select>
+        <input type="date" id="esl-flt-from" style="width:auto;font-size:12px" placeholder="Du">
+        <input type="date" id="esl-flt-to" style="width:auto;font-size:12px" placeholder="Au">
+      </div>
+    </div>
+    <div id="escale-list"></div>
+  </div>
+
+  <!-- ── ETA WAPCO ── -->
+  <div id="tab-eta-wapco" class="tab" style="display:none">
+    <div class="card-dk mb12">
+      <div class="flex-b">
+        <div>
+          <div style="font-size:15px;font-weight:700;letter-spacing:.06em;color:rgba(200,164,74,.9)">🚢 ETA WAPCO · Navires commerciaux</div>
+          <div style="font-size:10px;color:rgba(111,163,200,.7);margin-top:2px">Suivi des arrivées WAPCO / SPM Sèmè</div>
+        </div>
+        <div class="flex" style="gap:6px">
+          <div style="position:relative">
+            <button class="btn" style="font-size:11px" onclick="toggleDropdown('dd-wapco-io')">⇅ Import / Export ▾</button>
+            <div id="dd-wapco-io" class="io-dropdown" style="display:none">
+              <label class="io-item" style="cursor:pointer">
+                ↑ Importer CSV <input type="file" accept=".csv" style="display:none" onchange="importModuleCSV(this,'wapco')">
+              </label>
+              <label class="io-item" style="cursor:pointer">
+                ↑ Importer Excel <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importModuleXLSX(this,'wapco')">
+              </label>
+              <div class="io-sep"></div>
+              <button class="io-item" onclick="exportModuleCSV('wapco')">↓ Exporter CSV</button>
+              <button class="io-item" onclick="exportModuleXLSX('wapco')">↓ Exporter Excel</button>
+              <button class="io-item" onclick="openExportPDF('wapco')">↓ Exporter PDF</button>
+            </div>
+          </div>
+          <button class="btn btn-gold" id="btn-new-wapco">+ Nouvel ETA</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Formulaire ETA WAPCO -->
+    <div id="wapco-form" style="display:none" class="card-section mb12">
+      <div class="card-section-header">
+        <div style="font-size:13px;font-weight:700" id="wapco-form-title">Nouvel ETA WAPCO</div>
+        <button class="btn" id="wapco-cancel">✕ Annuler</button>
+      </div>
+      <div class="card-section-body">
+        <div class="section-lbl">📋 Identification du navire</div>
+        <div class="g4 mb10">
+          <div class="fg"><label>N° Voyage</label><input type="text" id="wap-num" placeholder="WAPCO-2026-001"></div>
+          <div class="fg"><label>Nom du navire</label><input type="text" id="wap-nom" placeholder="MSC BEATRICE..."></div>
+          <div class="fg"><label>MMSI</label><input type="text" id="wap-mmsi" placeholder="636013000"></div>
+          <div class="fg"><label>IMO</label><input type="text" id="wap-imo" placeholder="9234567"></div>
+          <div class="fg"><label>Type de navire</label>
+            <select id="wap-type">
+              <option value="cargo">Cargo général</option>
+              <option value="porte_conteneurs">Porte-conteneurs</option>
+              <option value="vraquier">Vraquier</option>
+              <option value="petrolier">Pétrolier</option>
+              <option value="roro">Roro</option>
+              <option value="ferry">Ferry / Passagers</option>
+              <option value="chimiqueur">Chimiqueur</option>
+              <option value="autre">Autre</option>
+            </select>
+          </div>
+          <div class="fg"><label>Pavillon</label><input type="text" id="wap-pavillon" placeholder="Panama, Liberia..."></div>
+          <div class="fg"><label>Commandant</label><input type="text" id="wap-commandant" placeholder="SMITH John"></div>
+          <div class="fg"><label>Port d'origine</label><input type="text" id="wap-origine" placeholder="Abidjan, Lomé, Lagos..."></div>
+        </div>
+        <div class="section-lbl">📦 Cargaison</div>
+        <div class="g4 mb10">
+          <div class="fg" style="grid-column:span 2"><label>Nature de la cargaison</label><input type="text" id="wap-cargaison" placeholder="Conteneurs, clinker, produits pétroliers..."></div>
+          <div class="fg"><label>Quantité (tonnes)</label><input type="number" id="wap-quantite" placeholder="25000" step="0.01"></div>
+          <div class="fg"><label>Poste / Quai</label><input type="text" id="wap-poste" placeholder="Quai 1, Terminal à conteneurs..."></div>
+        </div>
+        <div class="section-lbl">🗓️ Planning &amp; Coordination</div>
+        <div class="g4 mb10">
+          <div class="fg"><label>ETA (prévue)</label><input type="datetime-local" id="wap-eta"></div>
+          <div class="fg"><label>ETA (réelle)</label><input type="datetime-local" id="wap-eta-reelle"></div>
+          <div class="fg"><label>ETD (estimée)</label><input type="datetime-local" id="wap-etd"></div>
+          <div class="fg"><label>VHF de travail</label><input type="text" id="wap-vhf" placeholder="VHF 16 / CH 12"></div>
+          <div class="fg"><label>Agent consignataire</label><input type="text" id="wap-agent" placeholder="SDMV, Maersk Line..."></div>
+          <div class="fg" style="display:flex;align-items:center;gap:8px;padding-top:18px">
+            <input type="checkbox" id="wap-escorte-req" style="width:16px;height:16px">
+            <label for="wap-escorte-req" style="margin:0;font-weight:600">Escorte requise</label>
+          </div>
+          <div class="fg"><label>Statut</label>
+            <select id="wap-statut">
+              <option value="planifie">Planifié</option>
+              <option value="en_route">En route</option>
+              <option value="au_port">Au port</option>
+              <option value="en_dechargement">En déchargement</option>
+              <option value="appareille">Appareillé</option>
+              <option value="annule">Annulé</option>
+            </select>
+          </div>
+        </div>
+        <div class="fg mb10"><label>Observations</label>
+          <textarea id="wap-observations" rows="3" placeholder="Marchandises dangereuses, instructions spéciales, coordination autorités..."></textarea>
+        </div>
+        <div class="fg mb10">
+          <label>📎 Document d'autorisation</label>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:4px;flex-wrap:wrap">
+            <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px dashed rgba(200,164,74,.4);border-radius:6px;cursor:pointer;font-size:11px;color:rgba(200,164,74,.8);transition:background .15s" onmouseover="this.style.background='rgba(200,164,74,.08)'" onmouseout="this.style.background='none'">
+              ↑ Choisir un fichier (PDF, Word, image — max 10 Mo)
+              <input type="file" id="wap-doc-file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" style="display:none" onchange="onWapDocChange(this)">
+            </label>
+            <span id="wap-doc-preview" style="font-size:11px;color:rgba(111,163,200,.8)"></span>
+          </div>
+          <div id="wap-doc-viewer" style="display:none;margin-top:10px;border:1px solid rgba(200,164,74,.25);border-radius:8px;overflow:hidden;background:rgba(0,0,0,.15)"></div>
+          <div id="wap-doc-existing" style="display:none;margin-top:6px;font-size:11px">
+            <span style="color:var(--color-text-secondary)">Document existant : </span>
+            <a id="wap-doc-link" href="#" style="color:rgba(200,164,74,.9)" onclick="dlDoc(this,'wapco')">⬇ Télécharger</a>
+            <button onclick="clearDoc('wap')" style="margin-left:8px;background:none;border:none;color:#f87171;cursor:pointer;font-size:11px;padding:0">✕ Supprimer</button>
+          </div>
+        </div>
+        <input type="hidden" id="wap-edit-id">
+        <div class="flex">
+          <button class="btn btn-gold" id="wap-save">✔ Enregistrer l'ETA</button>
+          <button class="btn" id="wapco-cancel2">✕ Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="g4 mb10" style="grid-template-columns:repeat(6,1fr)">
+      <div class="stat"><div class="stat-l">Total ETAs</div><div class="stat-v" id="wap-total">0</div></div>
+      <div class="stat"><div class="stat-l">Planifiés</div><div class="stat-v" id="wap-plan" style="color:rgba(200,164,74,.9)">0</div></div>
+      <div class="stat"><div class="stat-l">En route</div><div class="stat-v" id="wap-enroute" style="color:#3b82f6">0</div></div>
+      <div class="stat"><div class="stat-l">Au port</div><div class="stat-v" id="wap-port" style="color:#27ae60">0</div></div>
+      <div class="stat"><div class="stat-l">Déchargement</div><div class="stat-v" id="wap-dech" style="color:#8b5cf6">0</div></div>
+      <div class="stat"><div class="stat-l">Escortes req.</div><div class="stat-v" id="wap-esc-req" style="color:#ef4444">0</div></div>
+    </div>
+
+    <!-- Filtres -->
+    <div class="flex-b mb10">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.05em" id="wap-count-lbl"></div>
+      <div class="flex">
+        <select id="wap-flt-st" style="width:auto;font-size:12px">
+          <option value="">Tous statuts</option>
+          <option value="planifie">Planifié</option>
+          <option value="en_route">En route</option>
+          <option value="au_port">Au port</option>
+          <option value="en_dechargement">En déchargement</option>
+          <option value="appareille">Appareillé</option>
+          <option value="annule">Annulé</option>
+        </select>
+        <input type="date" id="wap-flt-from" style="width:auto;font-size:12px">
+        <input type="date" id="wap-flt-to" style="width:auto;font-size:12px">
+      </div>
+    </div>
+    <div id="wapco-list"></div>
+  </div>
+
   <div id="tab-escorte" class="tab" style="display:none">
     <div class="card-dk mb12">
       <div class="flex-b">
@@ -1608,7 +1969,24 @@
           <div style="font-size:10px;color:rgba(111,163,200,.7);margin-top:2px">Marine Nationale · Appareillage ·
             Escorte entrante / sortante</div>
         </div>
-        <button class="btn btn-gold" id="btn-new-escorte">+ Nouvelle mission</button>
+        <div class="flex" style="gap:6px">
+          <div style="position:relative">
+            <button class="btn" style="font-size:11px" onclick="toggleDropdown('dd-escorte-io')">⇅ Import / Export ▾</button>
+            <div id="dd-escorte-io" class="io-dropdown" style="display:none">
+              <label class="io-item" style="cursor:pointer">
+                ↑ Importer CSV <input type="file" accept=".csv" style="display:none" onchange="importModuleCSV(this,'escorte')">
+              </label>
+              <label class="io-item" style="cursor:pointer">
+                ↑ Importer Excel <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importModuleXLSX(this,'escorte')">
+              </label>
+              <div class="io-sep"></div>
+              <button class="io-item" onclick="exportModuleCSV('escorte')">↓ Exporter CSV</button>
+              <button class="io-item" onclick="exportModuleXLSX('escorte')">↓ Exporter Excel</button>
+              <button class="io-item" onclick="openExportPDF('escorte')">↓ Exporter PDF</button>
+            </div>
+          </div>
+          <button class="btn btn-gold" id="btn-new-escorte">+ Nouvelle mission</button>
+        </div>
       </div>
     </div>
     <div id="escorte-form" style="display:none" class="card-section mb12">

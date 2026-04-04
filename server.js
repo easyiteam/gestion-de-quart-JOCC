@@ -23,6 +23,10 @@ const app  = express();
 const PORT = process.env.PORT || 3001;
 
 // ─── CONNEXION POSTGRESQL ─────────────────────────────────────────────────
+// Retourner les colonnes DATE en string brute (évite le décalage timezone UTC)
+const { types } = require('pg');
+types.setTypeParser(1082, val => val); // DATE → string 'YYYY-MM-DD'
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
@@ -166,6 +170,67 @@ async function applyMigrations() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC)`);
+
+    // Table escales (navires de guerre en escale)
+    await pool.query(`CREATE TABLE IF NOT EXISTS escales (
+      id            VARCHAR(30)  PRIMARY KEY,
+      num_escale    VARCHAR(30)  NOT NULL,
+      nom_batiment  VARCHAR(150) NOT NULL,
+      type_batiment VARCHAR(30)  NOT NULL DEFAULT 'autre',
+      nationalite   VARCHAR(100) NOT NULL DEFAULT '',
+      pavillon      VARCHAR(100) NOT NULL DEFAULT '',
+      commandant    VARCHAR(150) NOT NULL DEFAULT '',
+      equipage      INTEGER,
+      longueur      NUMERIC(6,1),
+      tirant_eau    NUMERIC(4,1),
+      poste_amarrage VARCHAR(100) DEFAULT '',
+      eta           TIMESTAMPTZ,
+      eta_reelle    TIMESTAMPTZ,
+      etd           TIMESTAMPTZ,
+      etd_reelle    TIMESTAMPTZ,
+      motif         VARCHAR(40)  NOT NULL DEFAULT 'visite_protocolaire',
+      observations  TEXT         NOT NULL DEFAULT '',
+      statut        VARCHAR(20)  NOT NULL DEFAULT 'attendu',
+      equipe_id     CHAR(1),
+      created_by    VARCHAR(30),
+      created_at    TIMESTAMPTZ  DEFAULT NOW(),
+      updated_at    TIMESTAMPTZ  DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_escales_eta ON escales(eta DESC)`);
+    await pool.query(`ALTER TABLE escales ADD COLUMN IF NOT EXISTS doc_autorisation_data TEXT`);
+    await pool.query(`ALTER TABLE escales ADD COLUMN IF NOT EXISTS doc_autorisation_nom  VARCHAR(255)`);
+
+    // Table eta_wapco (ETAs WAPCO)
+    await pool.query(`CREATE TABLE IF NOT EXISTS eta_wapco (
+      id                VARCHAR(30)  PRIMARY KEY,
+      num_voyage        VARCHAR(30)  NOT NULL,
+      nom_navire        VARCHAR(150) NOT NULL,
+      mmsi              VARCHAR(12)  NOT NULL DEFAULT '',
+      imo               VARCHAR(12)  NOT NULL DEFAULT '',
+      type_navire       VARCHAR(40)  NOT NULL DEFAULT 'cargo',
+      pavillon          VARCHAR(100) NOT NULL DEFAULT '',
+      commandant        VARCHAR(150) NOT NULL DEFAULT '',
+      port_origine      VARCHAR(100) NOT NULL DEFAULT '',
+      cargaison         VARCHAR(200) NOT NULL DEFAULT '',
+      quantite          NUMERIC(12,2),
+      eta               TIMESTAMPTZ,
+      eta_reelle        TIMESTAMPTZ,
+      etd               TIMESTAMPTZ,
+      poste             VARCHAR(100) NOT NULL DEFAULT '',
+      escorte_requise   BOOLEAN      NOT NULL DEFAULT false,
+      escorte_id        VARCHAR(30),
+      vhf               VARCHAR(30)  NOT NULL DEFAULT '',
+      agent_consignataire VARCHAR(150) NOT NULL DEFAULT '',
+      observations      TEXT         NOT NULL DEFAULT '',
+      statut            VARCHAR(30)  NOT NULL DEFAULT 'planifie',
+      equipe_id         CHAR(1),
+      created_by        VARCHAR(30),
+      created_at        TIMESTAMPTZ  DEFAULT NOW(),
+      updated_at        TIMESTAMPTZ  DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_eta_wapco_eta ON eta_wapco(eta DESC)`);
+    await pool.query(`ALTER TABLE eta_wapco ADD COLUMN IF NOT EXISTS doc_autorisation_data TEXT`);
+    await pool.query(`ALTER TABLE eta_wapco ADD COLUMN IF NOT EXISTS doc_autorisation_nom  VARCHAR(255)`);
 
     // Table reporting_env
     await pool.query(`
@@ -830,6 +895,185 @@ app.delete('/api/audit-logs', requireRole('supervision'), async (req, res) => {
       await pool.query('DELETE FROM audit_logs');
     }
     ok(res, { deleted: true });
+  } catch (e) { err(res, e.message); }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// API ESCALES (Navires de guerre en escale)
+// ═══════════════════════════════════════════════════════════════
+
+app.get('/api/escales', async (req, res) => {
+  try {
+    const { statut, equipe, from, to } = req.query;
+    let sql = 'SELECT * FROM escales WHERE 1=1';
+    const params = [];
+    if (statut) { params.push(statut); sql += ` AND statut=$${params.length}`; }
+    if (equipe) { params.push(equipe); sql += ` AND equipe_id=$${params.length}`; }
+    if (from)   { params.push(from);   sql += ` AND eta >= $${params.length}`; }
+    if (to)     { params.push(to + 'T23:59:59Z'); sql += ` AND eta <= $${params.length}`; }
+    sql += ' ORDER BY eta DESC NULLS LAST';
+    const r = await pool.query(sql, params);
+    ok(res, r.rows);
+  } catch (e) { err(res, e.message); }
+});
+
+app.post('/api/escales', requireAuth, async (req, res) => {
+  try {
+    const s = req.body;
+    if (!s.nom_batiment) return err(res, 'Nom du bâtiment requis', 400);
+    const year = new Date().getFullYear();
+    const numDefault = `ESC-${year}-${String(Date.now()).slice(-4)}`;
+    const r = await pool.query(
+      `INSERT INTO escales (id,num_escale,nom_batiment,type_batiment,nationalite,pavillon,
+         commandant,equipage,longueur,tirant_eau,poste_amarrage,eta,eta_reelle,etd,etd_reelle,
+         motif,observations,statut,equipe_id,created_by,doc_autorisation_data,doc_autorisation_nom)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *`,
+      [s.id||genId(), s.num_escale||numDefault, s.nom_batiment.toUpperCase(),
+       s.type_batiment||'autre', s.nationalite||'', s.pavillon||'', s.commandant||'',
+       s.equipage||null, s.longueur||null, s.tirant_eau||null, s.poste_amarrage||'',
+       s.eta||null, s.eta_reelle||null, s.etd||null, s.etd_reelle||null,
+       s.motif||'visite_protocolaire', s.observations||'', s.statut||'attendu',
+       s.equipe_id||null, req.user?.id||null,
+       s.doc_autorisation_data||null, s.doc_autorisation_nom||null]
+    );
+    ok(res, r.rows[0]);
+  } catch (e) { err(res, e.message); }
+});
+
+app.put('/api/escales/:id', requireAuth, async (req, res) => {
+  try {
+    const s = req.body;
+    if (!s.nom_batiment) return err(res, 'Nom du bâtiment requis', 400);
+    const r = await pool.query(
+      `UPDATE escales SET num_escale=$1,nom_batiment=$2,type_batiment=$3,nationalite=$4,pavillon=$5,
+         commandant=$6,equipage=$7,longueur=$8,tirant_eau=$9,poste_amarrage=$10,
+         eta=$11,eta_reelle=$12,etd=$13,etd_reelle=$14,motif=$15,observations=$16,
+         equipe_id=$17,
+         doc_autorisation_data=COALESCE($18, doc_autorisation_data),
+         doc_autorisation_nom=COALESCE($19, doc_autorisation_nom),
+         updated_at=NOW()
+       WHERE id=$20 RETURNING *`,
+      [s.num_escale, s.nom_batiment.toUpperCase(), s.type_batiment||'autre',
+       s.nationalite||'', s.pavillon||'', s.commandant||'',
+       s.equipage||null, s.longueur||null, s.tirant_eau||null, s.poste_amarrage||'',
+       s.eta||null, s.eta_reelle||null, s.etd||null, s.etd_reelle||null,
+       s.motif||'visite_protocolaire', s.observations||'', s.equipe_id||null,
+       s.doc_autorisation_data||null, s.doc_autorisation_nom||null, req.params.id]
+    );
+    if (!r.rows.length) return err(res, 'Escale non trouvée', 404);
+    ok(res, r.rows[0]);
+  } catch (e) { err(res, e.message); }
+});
+
+app.patch('/api/escales/:id/statut', requireAuth, async (req, res) => {
+  try {
+    const valid = ['attendu','a_quai','appareille','annule'];
+    if (!valid.includes(req.body.statut)) return err(res, 'Statut invalide', 400);
+    const r = await pool.query(
+      'UPDATE escales SET statut=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
+      [req.body.statut, req.params.id]
+    );
+    if (!r.rows.length) return err(res, 'Escale non trouvée', 404);
+    ok(res, r.rows[0]);
+  } catch (e) { err(res, e.message); }
+});
+
+app.delete('/api/escales/:id', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('DELETE FROM escales WHERE id=$1 RETURNING id', [req.params.id]);
+    if (!r.rows.length) return err(res, 'Escale non trouvée', 404);
+    ok(res, { deleted: req.params.id });
+  } catch (e) { err(res, e.message); }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// API ETA WAPCO
+// ═══════════════════════════════════════════════════════════════
+
+app.get('/api/eta-wapco', async (req, res) => {
+  try {
+    const { statut, from, to } = req.query;
+    let sql = 'SELECT * FROM eta_wapco WHERE 1=1';
+    const params = [];
+    if (statut) { params.push(statut); sql += ` AND statut=$${params.length}`; }
+    if (from)   { params.push(from);   sql += ` AND eta >= $${params.length}`; }
+    if (to)     { params.push(to + 'T23:59:59Z'); sql += ` AND eta <= $${params.length}`; }
+    sql += ' ORDER BY eta ASC NULLS LAST';
+    const r = await pool.query(sql, params);
+    ok(res, r.rows);
+  } catch (e) { err(res, e.message); }
+});
+
+app.post('/api/eta-wapco', requireAuth, async (req, res) => {
+  try {
+    const s = req.body;
+    if (!s.nom_navire) return err(res, 'Nom du navire requis', 400);
+    const year = new Date().getFullYear();
+    const numDefault = `WAPCO-${year}-${String(Date.now()).slice(-4)}`;
+    const r = await pool.query(
+      `INSERT INTO eta_wapco (id,num_voyage,nom_navire,mmsi,imo,type_navire,pavillon,commandant,
+         port_origine,cargaison,quantite,eta,eta_reelle,etd,poste,escorte_requise,escorte_id,
+         vhf,agent_consignataire,observations,statut,equipe_id,created_by,
+         doc_autorisation_data,doc_autorisation_nom)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING *`,
+      [s.id||genId(), s.num_voyage||numDefault, s.nom_navire.toUpperCase(),
+       s.mmsi||'', s.imo||'', s.type_navire||'cargo', s.pavillon||'', s.commandant||'',
+       s.port_origine||'', s.cargaison||'', s.quantite||null,
+       s.eta||null, s.eta_reelle||null, s.etd||null, s.poste||'',
+       s.escorte_requise||false, s.escorte_id||null,
+       s.vhf||'', s.agent_consignataire||'', s.observations||'',
+       s.statut||'planifie', s.equipe_id||null, req.user?.id||null,
+       s.doc_autorisation_data||null, s.doc_autorisation_nom||null]
+    );
+    ok(res, r.rows[0]);
+  } catch (e) { err(res, e.message); }
+});
+
+app.put('/api/eta-wapco/:id', requireAuth, async (req, res) => {
+  try {
+    const s = req.body;
+    if (!s.nom_navire) return err(res, 'Nom du navire requis', 400);
+    const r = await pool.query(
+      `UPDATE eta_wapco SET num_voyage=$1,nom_navire=$2,mmsi=$3,imo=$4,type_navire=$5,pavillon=$6,
+         commandant=$7,port_origine=$8,cargaison=$9,quantite=$10,eta=$11,eta_reelle=$12,etd=$13,
+         poste=$14,escorte_requise=$15,escorte_id=$16,vhf=$17,agent_consignataire=$18,
+         observations=$19,statut=$20,equipe_id=$21,
+         doc_autorisation_data=COALESCE($22, doc_autorisation_data),
+         doc_autorisation_nom=COALESCE($23, doc_autorisation_nom),
+         updated_at=NOW()
+       WHERE id=$24 RETURNING *`,
+      [s.num_voyage, s.nom_navire.toUpperCase(), s.mmsi||'', s.imo||'',
+       s.type_navire||'cargo', s.pavillon||'', s.commandant||'',
+       s.port_origine||'', s.cargaison||'', s.quantite||null,
+       s.eta||null, s.eta_reelle||null, s.etd||null, s.poste||'',
+       s.escorte_requise||false, s.escorte_id||null,
+       s.vhf||'', s.agent_consignataire||'', s.observations||'',
+       s.statut||'planifie', s.equipe_id||null,
+       s.doc_autorisation_data||null, s.doc_autorisation_nom||null, req.params.id]
+    );
+    if (!r.rows.length) return err(res, 'ETA WAPCO non trouvé', 404);
+    ok(res, r.rows[0]);
+  } catch (e) { err(res, e.message); }
+});
+
+app.patch('/api/eta-wapco/:id/statut', requireAuth, async (req, res) => {
+  try {
+    const valid = ['planifie','en_route','au_port','en_dechargement','appareille','annule'];
+    if (!valid.includes(req.body.statut)) return err(res, 'Statut invalide', 400);
+    const r = await pool.query(
+      'UPDATE eta_wapco SET statut=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
+      [req.body.statut, req.params.id]
+    );
+    if (!r.rows.length) return err(res, 'ETA WAPCO non trouvé', 404);
+    ok(res, r.rows[0]);
+  } catch (e) { err(res, e.message); }
+});
+
+app.delete('/api/eta-wapco/:id', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('DELETE FROM eta_wapco WHERE id=$1 RETURNING id', [req.params.id]);
+    if (!r.rows.length) return err(res, 'ETA WAPCO non trouvé', 404);
+    ok(res, { deleted: req.params.id });
   } catch (e) { err(res, e.message); }
 });
 
