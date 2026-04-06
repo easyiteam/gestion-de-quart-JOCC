@@ -951,7 +951,7 @@ window.printRenv = () => {
     <div class="header">
       ${logoSrc ? `<img src="${logoSrc}" alt="JOCC">` : ''}
       <div class="header-org">
-        <div class="org-main">PRÉFECTURE MARITIME — JOCC BÉNIN</div>
+        <div class="org-main">PRÉFECTURE MARITIME — JOCC</div>
         <div class="org-sub">JOINT OPERATIONS COMMAND CENTER · Gestion des Quarts</div>
       </div>
       <div class="header-doc">
@@ -976,7 +976,7 @@ window.printRenv = () => {
     </table>
     <div class="nb-note"><strong>NB :</strong> Décrire les constats en précisant la nature, la période d'observation, la localisation, l'étendue.</div>
     <div class="footer">
-      <span>PRÉFECTURE MARITIME — JOCC BÉNIN — Document généré automatiquement</span>
+      <span>PRÉFECTURE MARITIME — JOCC — Document généré automatiquement</span>
       <span>Rapport du ${fmt(date)} · Équipe ${renvCurrent.equipe}</span>
     </div>
     <script>window.print();<\/script></body></html>`);
